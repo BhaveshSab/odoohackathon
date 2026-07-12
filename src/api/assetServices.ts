@@ -338,68 +338,8 @@ export async function getAnalytics(timeRange: string): Promise<AnalyticsData> {
 }
 
 // =============================================
-// DEPARTMENTS API (Organization Setup)
+// ORGANIZATION SETUP APIs
 // =============================================
-
-export interface Department {
-  id: string;
-  name: string;
-  head: string;
-  headEmail: string;
-  parent: string | null;
-  status: string;
-  employeeCount: number;
-}
-
-/**
- * Fetches all departments with hierarchy, head, and employee count.
- *
- * TODO: Replace the mock data below with:
- *   const response = await axios.get('YOUR_BACKEND_URL/api/departments');
- *   return response.data;
- */
-export async function getDepartments(): Promise<Department[]> {
-  // --- Simulated API call (remove when connecting real backend) ---
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  return [
-    { id: "D-HQ", name: "Headquarters", head: "Admin Team", headEmail: "bhavesh.cool2005@gmail.com", parent: null, status: "Active", employeeCount: 120 },
-    { id: "D-ENG", name: "Engineering", head: "Bhavesh Sabnani", headEmail: "bhavesh.sabnani2005@gmail.com", parent: "Headquarters", status: "Active", employeeCount: 45 },
-    { id: "D-MKT", name: "Marketing", head: "Sarah Jenkins", headEmail: "sarah.j@example.com", parent: "Headquarters", status: "Active", employeeCount: 18 },
-    { id: "D-LEG", name: "Legal & Compliance", head: "Unassigned", headEmail: "", parent: "Headquarters", status: "Inactive", employeeCount: 0 },
-  ];
-  // ----------------------------------------------------------------
-}
-
-// =============================================
-// ASSET CATEGORIES API (Organization Setup - Tab B)
-// =============================================
-
-export interface AssetCategory {
-  id: string;
-  name: string;
-  description: string;
-  customFields: string[];
-  assetCount: number;
-  status: string;
-}
-
-/**
- * Fetches all asset categories with custom fields and asset counts.
- *
- * TODO: Replace the mock data below with:
- *   const response = await axios.get('YOUR_BACKEND_URL/api/categories');
- *   return response.data;
- */
-export async function getCategories(): Promise<AssetCategory[]> {
-  // --- Simulated API call (remove when connecting real backend) ---
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  return [
-    { id: "CAT-01", name: "Electronics & IT", description: "Laptops, monitors, servers, and peripherals.", customFields: ["Warranty Expiry", "OS Version", "MAC Address"], assetCount: 450, status: "Active" },
-    { id: "CAT-02", name: "Vehicles", description: "Company cars, delivery vans, and trucks.", customFields: ["License Plate", "Mileage", "Last Service Date"], assetCount: 24, status: "Active" },
-    { id: "CAT-03", name: "Office Furniture", description: "Desks, ergonomic chairs, and conference tables.", customFields: ["Material", "Dimensions"], assetCount: 850, status: "Active" },
-    { id: "CAT-04", name: "Heavy Machinery", description: "Warehouse forklifts and manufacturing equipment.", customFields: ["Load Capacity", "Safety Inspection Date"], assetCount: 12, status: "Inactive" },
-  ];
-  // ----------------------------------------------------------------
-}
+// DEPRECATED: Department & Category CRUD operations have been
+// moved to src/services/organizationService.ts
+// Import from there: import { fetchDepartments, createDepartment, ... } from '@/services/organizationService';
