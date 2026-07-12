@@ -135,3 +135,71 @@ export async function transferAsset(allocationId: string, newAssignee: string) {
   await new Promise((resolve) => setTimeout(resolve, 500));
   return { success: true, allocationId, newAssignee };
 }
+
+// =============================================
+// RESOURCE BOOKING API
+// =============================================
+
+export interface BookableResource {
+  id: string;
+  name: string;
+  type: string;
+  capacity: string;
+  location: string;
+}
+
+export interface ResourceSlot {
+  id: string;
+  time: string;
+  status: string;
+  bookedBy?: string;
+}
+
+/**
+ * Fetches all bookable resources (rooms, vehicles, equipment).
+ *
+ * TODO: Replace the mock data below with:
+ *   const response = await axios.get('YOUR_BACKEND_URL/api/resources/bookable');
+ *   return response.data;
+ */
+export async function getBookableResources(): Promise<BookableResource[]> {
+  // --- Simulated API call (remove when connecting real backend) ---
+  await new Promise((resolve) => setTimeout(resolve, 800));
+
+  return [
+    { id: "R-01", name: "Conference Room A", type: "room", capacity: "12 People", location: "Floor 2" },
+    { id: "R-02", name: "Delivery Van (Transit)", type: "vehicle", capacity: "1000kg", location: "Loading Bay" },
+    { id: "R-03", name: "4K Projector Cart", type: "equipment", capacity: "N/A", location: "IT Dept" },
+  ];
+  // ----------------------------------------------------------------
+}
+
+/**
+ * Fetches available time slots for a specific resource on a given date.
+ *
+ * TODO: Replace the mock data below with:
+ *   const response = await axios.get('YOUR_BACKEND_URL/api/bookings', {
+ *     params: { resourceId, date }
+ *   });
+ *   return response.data;
+ */
+export async function getResourceSlots(
+  resourceId: string,
+  date: number
+): Promise<ResourceSlot[]> {
+  // --- Simulated API call (remove when connecting real backend) ---
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  void resourceId;
+  void date;
+
+  return [
+    { id: "S1", time: "09:00 AM - 10:00 AM", status: "available" },
+    { id: "S2", time: "10:00 AM - 11:00 AM", status: "booked", bookedBy: "Priya Sharma" },
+    { id: "S3", time: "11:00 AM - 12:00 PM", status: "booked", bookedBy: "Amit Kumar" },
+    { id: "S4", time: "12:00 PM - 01:00 PM", status: "available" },
+    { id: "S5", time: "01:00 PM - 02:00 PM", status: "available" },
+    { id: "S6", time: "02:00 PM - 03:00 PM", status: "available" },
+  ];
+  // ----------------------------------------------------------------
+}
