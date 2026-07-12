@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import Sidebar from "@/components/dashboard/Sidebar";
 import TopHeader from "@/components/dashboard/TopHeader";
 
-export type ViewName = "Dashboard" | "AssetDirectory" | "AllocationsTransfers" | "ResourceBooking" | "Maintenance" | "AssetAudits" | "ReportsAnalytics";
+export type ViewName = "Dashboard" | "AssetDirectory" | "AllocationsTransfers" | "ResourceBooking" | "Maintenance" | "AssetAudits" | "ReportsAnalytics" | "OrganizationSetup";
 
 /** Maps sidebar hrefs to internal view names. */
 const VIEW_ROUTES: Record<string, ViewName> = {
@@ -17,6 +17,7 @@ const VIEW_ROUTES: Record<string, ViewName> = {
   "/maintenance": "Maintenance",
   "/audits": "AssetAudits",
   "/reports": "ReportsAnalytics",
+  "/org-setup": "OrganizationSetup",
 };
 
 export interface DashboardLayoutProps {

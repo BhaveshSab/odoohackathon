@@ -18,6 +18,7 @@ import ResourceBooking from "@/components/dashboard/ResourceBooking";
 import Maintenance from "@/components/dashboard/Maintenance";
 import AssetAudits from "@/components/dashboard/AssetAudits";
 import ReportsAnalytics from "@/components/dashboard/ReportsAnalytics";
+import OrganizationSetup from "@/components/dashboard/OrganizationSetup";
 import { clearSession, getSession, type AuthResponse } from "@/lib/auth";
 
 /* ------------------------------------------------------------------ */
@@ -194,6 +195,8 @@ export default function Dashboard() {
       {currentView === "AssetAudits" && <AssetAudits />}
 
       {currentView === "ReportsAnalytics" && <ReportsAnalytics />}
+
+      {currentView === "OrganizationSetup" && <OrganizationSetup />}
     </DashboardLayout>
   );
 }
