@@ -10,6 +10,7 @@ import {
   Sparkles,
   User as UserIcon,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Link } from "react-router-dom";
 
@@ -207,8 +208,11 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
     const copy = PANEL_COPY[mode];
 
     return (
-      <div
+      <motion.div
         ref={ref}
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 350, damping: 28 }}
         className={cn(
           "w-full max-w-5xl overflow-hidden rounded-2xl bg-card shadow-xl shadow-primary/10 ring-1 ring-border md:grid md:grid-cols-2",
           className
@@ -291,14 +295,26 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
           </div>
 
           <div className="space-y-1.5">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            <motion.h1
+              key={`title-${mode}`}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className="text-2xl font-bold tracking-tight sm:text-3xl"
+            >
               {isSignup ? "Create account" : "Sign in"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
+            </motion.h1>
+            <motion.p
+              key={`sub-${mode}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.05 }}
+              className="text-sm text-muted-foreground"
+            >
               {isSignup
                 ? "Start your free trial. No credit card required."
                 : "Welcome back! Please enter your details."}
-            </p>
+            </motion.p>
           </div>
 
           {/* social */}
@@ -478,7 +494,7 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
             Secured with 256-bit encryption
           </p>
         </section>
-      </div>
+      </motion.div>
     );
   }
 );
