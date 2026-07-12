@@ -11,6 +11,8 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
+import { Link } from "react-router-dom";
+
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +56,8 @@ export interface AuthSwitchProps
   loading?: boolean;
   /** Error message rendered under the form (e.g. "Invalid credentials"). */
   error?: string;
+  /** Route path for the OTHER mode. Renders the side-panel CTA + footer link as <Link>. */
+  otherTo?: string;
 }
 
 const OTHER_MODE: Record<AuthMode, AuthMode> = {
@@ -149,6 +153,7 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
       brand,
       loading = false,
       error,
+      otherTo,
       ...props
     },
     ref
@@ -236,14 +241,24 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
               {copy.subtitle}
             </p>
 
-            <button
-              type="button"
-              onClick={() => setMode(OTHER_MODE[mode])}
-              className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-purple-700 shadow-lg transition-all hover:shadow-xl hover:active:scale-[0.98]"
-            >
-              {copy.cta}
-              <ArrowLeft className="h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" />
-            </button>
+            {otherTo ? (
+              <Link
+                to={otherTo}
+                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-purple-700 shadow-lg transition-all hover:shadow-xl hover:active:scale-[0.98]"
+              >
+                {copy.cta}
+                <ArrowLeft className="h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMode(OTHER_MODE[mode])}
+                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-purple-700 shadow-lg transition-all hover:shadow-xl hover:active:scale-[0.98]"
+              >
+                {copy.cta}
+                <ArrowLeft className="h-4 w-4 rotate-180 transition-transform group-hover:translate-x-1" />
+              </button>
+            )}
           </div>
 
           {/* testimonial */}
@@ -434,16 +449,28 @@ const AuthSwitch = React.forwardRef<HTMLDivElement, AuthSwitchProps>(
           {/* footer switch (mirrors the side panel CTA) */}
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button
-              type="button"
-              onClick={() => setMode(OTHER_MODE[mode])}
-              className={cn(
-                buttonVariants({ variant: "link" }),
-                "h-auto p-0 text-primary"
-              )}
-            >
-              {isSignup ? "Sign in" : "Sign up"}
-            </button>
+            {otherTo ? (
+              <Link
+                to={otherTo}
+                className={cn(
+                  buttonVariants({ variant: "link" }),
+                  "h-auto p-0 text-primary"
+                )}
+              >
+                {isSignup ? "Sign in" : "Sign up"}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMode(OTHER_MODE[mode])}
+                className={cn(
+                  buttonVariants({ variant: "link" }),
+                  "h-auto p-0 text-primary"
+                )}
+              >
+                {isSignup ? "Sign in" : "Sign up"}
+              </button>
+            )}
           </p>
 
           <p className="mt-8 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
