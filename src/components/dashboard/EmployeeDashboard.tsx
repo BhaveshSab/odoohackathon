@@ -43,7 +43,6 @@ import { getSession } from "@/lib/auth";
 // CONFIGURATION
 // ─────────────────────────────────────────────────────────────
 const BASE_URL = "http://localhost:5000/api";
-const EMPLOYEE_EMAIL = "bhavesh@gmail.com";
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -473,7 +472,7 @@ const EmployeeDashboard = ({ onNavigate, onSignOut }: EmployeeDashboardProps) =>
   const [toast, setToast] = useState<Toast | null>(null);
   const [cancelLoading, setCancelLoading] = useState<Record<number, boolean>>({});
 
-  const isEmployee = session?.user?.email === EMPLOYEE_EMAIL;
+  const isEmployee = session?.user?.role === "EMPLOYEE";
 
   const showToast = (msg: string, type = "success") => {
     setToast({ msg, type });

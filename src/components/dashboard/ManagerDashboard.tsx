@@ -16,7 +16,6 @@ import AllocateAssetModal from "@/components/dashboard/AllocateAssetModal";
 // CONFIG
 // =============================================
 const BASE_URL = "http://localhost:5000/api";
-const MANAGER_EMAIL = "bhavesh.sabnani2005@gmail.com";
 
 // =============================================
 // TYPES
@@ -231,7 +230,9 @@ export default function ManagerDashboard({ onNavigate, onSignOut }: ManagerDashb
   const [toast, setToast] = useState<Toast | null>(null);
   const [showAllocate, setShowAllocate] = useState(false);
 
-  const isManager = session?.user?.email === MANAGER_EMAIL;
+  const isManager =
+    session?.user?.role === "ASSET_MANAGER" ||
+    session?.user?.role === "DEPARTMENT_HEAD";
 
   const showToast = (msg: string, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 

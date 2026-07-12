@@ -16,13 +16,8 @@ import OrganizationSetup from "@/components/dashboard/OrganizationSetup";
 import { clearSession, getSession, type AuthResponse } from "@/lib/auth";
 
 /* ------------------------------------------------------------------ */
-/*  Role resolver — email-based for now, replace with backend later    */
+/*  Role comes from the session (set at login via the demo role map).  */
 /* ------------------------------------------------------------------ */
-const getUserRole = (email: string): Role => {
-  if (email === "bhavesh.cool2005@gmail.com") return "ADMIN";
-  if (email === "bhavesh.sabnani2005@gmail.com") return "ASSET_MANAGER";
-  return "EMPLOYEE";
-};
 
 /* ------------------------------------------------------------------ */
 /*  Navigation mapping — sidebar pageIds + quick-action strings       */
@@ -74,7 +69,7 @@ export default function Dashboard() {
   };
 
   /** Build sidebar props from session */
-  const role = getUserRole(session.user.email);
+  const role: Role = session.user.role ?? "EMPLOYEE";
   const sidebarProps: SidebarProps = {
     user: {
       name: session.user.name,
@@ -98,11 +93,11 @@ export default function Dashboard() {
       sidebarProps={sidebarProps}
     >
       {currentView === "Dashboard" && (
-        session.user.email === "bhavesh.sabnani2005@gmail.com"
-          ? <ManagerDashboard onNavigate={handleNavigate} onSignOut={handleSignOut} />
-          : session.user.email === "bhavesh@gmail.com"
+        role === "ADMIN"
+          ? <AdminDashboard onNavigate={handleNavigate} onSignOut={handleSignOut} />
+          : role === "EMPLOYEE"
             ? <EmployeeDashboard onNavigate={handleNavigate} onSignOut={handleSignOut} />
-            : <AdminDashboard onNavigate={handleNavigate} onSignOut={handleSignOut} />
+            : <ManagerDashboard onNavigate={handleNavigate} onSignOut={handleSignOut} />
       )}
 
       {currentView === "AssetDirectory" && <AssetDirectory />}

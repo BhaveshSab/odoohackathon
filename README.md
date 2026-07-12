@@ -1,58 +1,62 @@
-# Auth Switch — Sign In / Sign Up
+# AssetFlow — Enterprise Asset & Resource Management System
 
-A convertible sign-in / sign-up card built with **Vite + React + TypeScript +
-Tailwind CSS** using **shadcn** structure. Switch between "Sign in" and "Sign up"
-either with the tabs at the top of the card or the link at the bottom of each form.
+AssetFlow is a centralized ERP for tracking, allocating, and maintaining an
+organization's physical assets and shared resources — assets, allocations &
+transfers, resource bookings, a maintenance approval workflow, audit cycles,
+reports, and role-based dashboards for Admin, Asset Manager, Department Head,
+and Employee.
 
-## Getting started
+Built for the Odoo Hackathon with **React + TypeScript + Vite + Tailwind**
+(frontend) and **NestJS + PostgreSQL + Prisma** (backend, in [`backend/`](backend)).
+
+---
+
+## ▶️ Run the demo (no backend or database needed)
+
+The frontend runs **standalone on realistic demo data** — perfect for trying it
+on any laptop or recording a walkthrough.
 
 ```bash
 npm install
-npm run dev        # start the dev server (http://localhost:5173)
-npm run build      # type-check + production build
-npm run preview    # preview the production build
+npm run dev      # open http://localhost:5173
 ```
 
-## Project layout
+### Demo accounts
+Sign in with any of these emails and **any password** — each shows that role's
+dashboard and screens:
 
-```
-src/
-  components/
-    ui/
-      auth-switch.tsx   # the convertible auth card (default export)
-      button.tsx        # shadcn primitives
-      input.tsx
-      label.tsx
-      card.tsx
-      tabs.tsx
-      demo.tsx          # minimal usage example
-  lib/
-    utils.ts            # cn() helper
-  App.tsx               # renders <AuthSwitch/> centered
-  index.css             # Tailwind + shadcn CSS variables
-components.json         # shadcn config (so `npx shadcn add ...` works)
-tailwind.config.ts
-```
+| Email | Role you experience |
+|-------|---------------------|
+| `admin@assetflow.com` | **Admin** — org setup, all analytics |
+| `manager@assetflow.com` | **Asset Manager** — register/allocate assets, approvals |
+| `head@assetflow.com` | **Department Head** — department view + approvals |
+| `employee@assetflow.com` | **Employee** — my assets, book resources, raise requests |
 
-## `AuthSwitch` props
+Any other email signs in as an Employee. (Sign-up also creates an Employee.)
 
-| Prop           | Type                              | Default     | Description                                  |
-| -------------- | --------------------------------- | ----------- | -------------------------------------------- |
-| `defaultMode`  | `"signin" \| "signup"`            | `"signin"`  | Initial tab.                                 |
-| `mode`         | `"signin" \| "signup"`            | —           | Controlled mode.                             |
-| `onModeChange` | `(mode) => void`                  | —           | Fires when the user switches tabs.           |
-| `onSubmit`     | `(data) => void \| Promise<void>` | —           | Validated form submit (`{mode,email,password,name?}`). |
-| `sideImage`    | `string`                          | Unsplash URL| Decorative side-panel image.                 |
-| `brand`        | `ReactNode`                       | built-in    | Replace the default logo.                    |
-| `loading`      | `boolean`                         | `false`     | Disables inputs + shows spinner on submit.   |
-| `error`        | `string`                          | —           | Error banner under the form.                 |
+### What you can show in the demo
+Log in as each role and walk the sidebar: **Dashboard** (role-specific KPIs),
+**Asset Directory**, **Allocations & Transfers**, **Resource Booking**,
+**Maintenance**, **Asset Audits**, **Reports & Analytics**, **Organization
+Setup** (Admin). Data shown is representative demo data.
 
-## Using the `cn` helper and aliases
+---
 
-Path alias `@/*` → `src/*` is configured in `tsconfig.json` and `vite.config.ts`.
-Import primitives the shadcn way:
+## 🔌 Running against the real backend (optional)
 
-```ts
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-```
+The full REST API lives in [`backend/`](backend) (NestJS + Postgres + Prisma) and
+is documented in [`backend/API.md`](backend/API.md). It implements all 10 features
+with real auth (JWT), RBAC, and workflow logic, and is covered by end-to-end
+tests. See [`backend/README.md`](backend/README.md) to run it (Docker Postgres +
+`npm run start:dev`, serving `http://localhost:4000/api`).
+
+> Note: the demo UI currently uses built-in demo data so it runs anywhere with
+> zero setup. Wiring the live API into every screen (aligning endpoint paths and
+> auth) is the remaining integration step; the backend contract is ready in
+> `backend/API.md`.
+
+---
+
+## Tech stack
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Recharts, Framer Motion
+- **Backend:** NestJS, TypeScript, PostgreSQL, Prisma, JWT + bcrypt

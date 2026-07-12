@@ -15,7 +15,6 @@ import AllocateAssetModal from "@/components/dashboard/AllocateAssetModal";
 // CONFIG
 // =============================================
 const BASE_URL = "http://localhost:5000/api"; // TODO: Replace with real backend URL
-const ADMIN_EMAIL = "bhavesh.cool2005@gmail.com";
 
 // =============================================
 // TYPES
@@ -266,7 +265,7 @@ export default function AdminDashboard({ onNavigate, onSignOut }: AdminDashboard
   };
 
   // Admin guard
-  const isAdmin = session?.user?.email === ADMIN_EMAIL;
+  const isAdmin = session?.user?.role === "ADMIN";
 
   // Data fetcher — useCallback to avoid stale closures in setInterval
   const fetchAll = useCallback(async () => {
