@@ -103,6 +103,7 @@ enum AuditResult {
 
 enum NotificationType {
   ASSET_ASSIGNED
+  ASSET_RETURNED
   TRANSFER_REQUESTED
   TRANSFER_APPROVED
   TRANSFER_REJECTED
@@ -114,7 +115,10 @@ enum NotificationType {
   BOOKING_CANCELLED
   BOOKING_REMINDER
   OVERDUE_RETURN
+  AUDIT_ASSIGNED
   AUDIT_DISCREPANCY
+  AUDIT_CLOSED
+  USER_ROLE_CHANGED
 }
 
 // ---------------------------------------------------------------------------

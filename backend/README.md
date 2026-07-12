@@ -92,15 +92,26 @@ Every feature reads/writes these tables. Full definitions in
 |---|---------|--------|
 | 0 | Project scaffold, Prisma, config | ✅ done |
 | 1 | Data model (schema) | ✅ done |
-| 2 | Auth (signup=Employee, login, JWT) + RBAC guard | ✅ done |
-| 3 | Org setup (departments, categories, employee directory + role promotion) | ⏳ next |
-| 4 | Asset registration & directory | ⬜ |
-| 5 | Allocation & transfer workflow | ⬜ |
-| 6 | Resource booking (overlap validation) | ⬜ |
-| 7 | Maintenance workflow | ⬜ |
-| 8 | Audit cycles | ⬜ |
-| 9 | Dashboard KPIs & reports | ⬜ |
-| 10 | Notifications & activity log | ⬜ |
+| 1 | Auth (signup=Employee, login, JWT) + RBAC guard | ✅ done |
+| 2 | Dashboard KPIs (`/reports/dashboard`) | ✅ done |
+| 3 | Org setup (departments, categories, employee directory + role promotion) | ✅ done |
+| 4 | Asset registration & directory | ✅ done |
+| 5 | Allocation & transfer workflow | ✅ done |
+| 6 | Resource booking (overlap validation) | ✅ done |
+| 7 | Maintenance workflow | ✅ done |
+| 8 | Audit cycles | ✅ done |
+| 9 | Reports & analytics (+ CSV export) | ✅ done |
+| 10 | Notifications & activity log | ✅ done |
+
+**All 10 features implemented and tested end-to-end (50/50 E2E checks passing, incl. a concurrency test for the allocation lock).**
+
+### Demo accounts (after `npm run seed`) — password `password123`
+| Email | Role |
+|-------|------|
+| admin@assetflow.com | ADMIN |
+| manager@assetflow.com | ASSET_MANAGER |
+| head@assetflow.com | DEPARTMENT_HEAD |
+| priya@acme.com / raj@acme.com | EMPLOYEE |
 
 ---
 
