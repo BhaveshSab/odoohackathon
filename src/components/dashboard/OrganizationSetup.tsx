@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2, Search, Plus, MoreVertical, Users, Network,
   CheckCircle2, XCircle, AlertCircle, Layers, Contact,
   Tag, Settings2, Box, Edit2, X, Loader2,
+  User, UserCheck, UserX, Shield, ShieldCheck, ShieldAlert,
+  Crown, Briefcase, Mail, Filter, Trash2, ChevronDown, Check,
 } from "lucide-react";
 import {
   fetchDepartments, createDepartment, updateDepartment, toggleDepartmentStatus,
@@ -14,6 +16,584 @@ import {
 const itemVariants = {
   hidden: { opacity: 0, y: 10 },
   show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
+};
+
+// ─────────────────────────────────────────────────────────────
+// EMPLOYEE DIRECTORY — Types & Service
+// ─────────────────────────────────────────────────────────────
+interface Employee {
+  id: number;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  status: string;
+  joinedOn: string;
+  avatar: string;
+}
+
+interface EmployeeFormData {
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  status: string;
+}
+
+const employeeService = {
+  getAll: (): Promise<Employee[]> => Promise.resolve(DUMMY_EMPLOYEES),
+  create: (data: EmployeeFormData & { avatar: string }): Promise<Employee> =>
+    Promise.resolve({ ...data, id: Date.now(), joinedOn: new Date().toISOString().slice(0, 10) }),
+  update: (id: number, data: Partial<Employee>): Promise<Employee> =>
+    Promise.resolve({ id, ...data } as Employee),
+  delete: (_id: number): Promise<{ success: boolean }> =>
+    Promise.resolve({ success: true }),
+  promote: (id: number, role: string): Promise<{ id: number; role: string }> =>
+    Promise.resolve({ id, role }),
+  toggleStatus: (id: number, status: string): Promise<{ id: number; status: string }> =>
+    Promise.resolve({ id, status }),
+};
+
+const DUMMY_EMPLOYEES: Employee[] = [
+  { id: 1,  name: "Bhavesh Cool",     email: "bhavesh.cool2005@gmail.com",    department: "IT",          role: "Admin",           status: "Active",   joinedOn: "2024-01-10", avatar: "BC" },
+  { id: 2,  name: "Bhavesh Sabnani",  email: "bhavesh.sabnani2005@gmail.com", department: "Operations",  role: "Asset Manager",   status: "Active",   joinedOn: "2024-02-14", avatar: "BS" },
+  { id: 3,  name: "Bhavesh Employee", email: "bhavesh@gmail.com",             department: "Engineering", role: "Employee",        status: "Active",   joinedOn: "2024-03-01", avatar: "BE" },
+  { id: 4,  name: "Priya Sharma",     email: "priya.sharma@company.com",      department: "Engineering", role: "Department Head", status: "Active",   joinedOn: "2024-01-20", avatar: "PS" },
+  { id: 5,  name: "Raj Mehta",        email: "raj.mehta@company.com",         department: "Marketing",   role: "Employee",        status: "Active",   joinedOn: "2024-04-05", avatar: "RM" },
+  { id: 6,  name: "Sara Ali",         email: "sara.ali@company.com",          department: "Marketing",   role: "Department Head", status: "Active",   joinedOn: "2024-02-28", avatar: "SA" },
+  { id: 7,  name: "Kiran Das",        email: "kiran.das@company.com",         department: "Sales",       role: "Employee",        status: "Inactive", joinedOn: "2024-05-10", avatar: "KD" },
+  { id: 8,  name: "Amit Verma",       email: "amit.verma@company.com",        department: "HR",          role: "Asset Manager",   status: "Active",   joinedOn: "2024-03-15", avatar: "AV" },
+  { id: 9,  name: "Pooja Singh",      email: "pooja.singh@company.com",       department: "Operations",  role: "Employee",        status: "Active",   joinedOn: "2024-06-01", avatar: "PJ" },
+  { id: 10, name: "Vikram Nair",      email: "vikram.nair@company.com",       department: "Finance",     role: "Employee",        status: "Inactive", joinedOn: "2024-07-01", avatar: "VN" },
+];
+
+const ROLES = ["Employee", "Department Head", "Asset Manager", "Admin"] as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const roleConfig: Record<string, { label: string; color: string; dot: string; icon: any; description: string }> = {
+  Admin:             { label: "Admin",         color: "bg-purple-500/20 text-purple-300 border-purple-500/30", dot: "bg-purple-400", icon: Crown,       description: "Full system access" },
+  "Asset Manager":   { label: "Asset Manager", color: "bg-blue-500/20 text-blue-300 border-blue-500/30",       dot: "bg-blue-400",   icon: ShieldCheck, description: "Manages assets & approvals" },
+  "Department Head": { label: "Dept. Head",    color: "bg-amber-500/20 text-amber-300 border-amber-500/30",   dot: "bg-amber-400",  icon: Briefcase,   description: "Manages department assets" },
+  Employee:          { label: "Employee",      color: "bg-zinc-700/60 text-zinc-300 border-zinc-600/40",      dot: "bg-zinc-400",   icon: User,        description: "Standard access" },
+};
+
+const avatarColors = [
+  "bg-blue-600", "bg-purple-600", "bg-emerald-600", "bg-amber-600", "bg-rose-600",
+  "bg-cyan-600", "bg-indigo-600", "bg-pink-600", "bg-teal-600", "bg-orange-600",
+];
+const getAvatarColor = (id: number) => avatarColors[(id - 1) % avatarColors.length];
+
+const validateEmployee = (form: EmployeeFormData, employees: Employee[], editingId?: number) => {
+  const errors: Record<string, string> = {};
+  if (!form.name.trim()) errors.name = "Full name is required";
+  if (!form.email.trim()) errors.email = "Email is required";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Enter a valid email address";
+  else if (employees.some((e) => e.email === form.email && e.id !== editingId)) errors.email = "This email is already registered";
+  if (!form.department) errors.department = "Select a department";
+  if (!form.role) errors.role = "Select a role";
+  return errors;
+};
+
+// ── Sub-components for Employee Directory ──
+
+const RoleBadge = ({ role }: { role: string }) => {
+  const cfg = roleConfig[role] ?? roleConfig.Employee;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${cfg.color}`}>
+      <Icon size={10} />
+      {cfg.label}
+    </span>
+  );
+};
+
+const StatusPill = ({ status }: { status: string }) => (
+  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border
+    ${status === "Active" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-zinc-700/40 text-zinc-400 border-zinc-600/30"}`}>
+    <span className={`w-1.5 h-1.5 rounded-full ${status === "Active" ? "bg-emerald-400" : "bg-zinc-500"}`} />
+    {status}
+  </span>
+);
+
+const EmployeeToast = ({ toast }: { toast: { msg: string; type: string } | null }) => (
+  <AnimatePresence>
+    {toast && (
+      <motion.div
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-xl text-sm font-medium shadow-2xl border flex items-center gap-2
+          ${toast.type === "error" ? "bg-red-950 border-red-500/40 text-red-300" : toast.type === "warning" ? "bg-amber-950 border-amber-500/40 text-amber-300" : "bg-emerald-950 border-emerald-500/40 text-emerald-300"}`}
+      >
+        {toast.type === "error" ? <XCircle size={15} /> : toast.type === "warning" ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}
+        {toast.msg}
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+interface ConfirmState { title: string; message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void }
+
+const EmployeeConfirmDialog = ({ open, title, message, onConfirm, onCancel, confirmLabel = "Confirm", danger = false }: {
+  open: boolean; title?: string; message?: string; onConfirm: () => void; onCancel: () => void; confirmLabel?: string; danger?: boolean
+}) => (
+  <AnimatePresence>
+    {open && (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[150] flex items-center justify-center p-4" onClick={onCancel}>
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()} className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${danger ? "bg-red-500/20" : "bg-amber-500/20"}`}>
+            <AlertCircle size={22} className={danger ? "text-red-400" : "text-amber-400"} />
+          </div>
+          <h3 className="text-white font-bold text-center mb-1">{title}</h3>
+          <p className="text-gray-400 text-sm text-center mb-6">{message}</p>
+          <div className="flex gap-3">
+            <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-gray-400 text-sm hover:border-zinc-500 hover:text-white transition-all">Cancel</button>
+            <button onClick={onConfirm} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${danger ? "bg-red-600 hover:bg-red-500 text-white" : "bg-amber-600 hover:bg-amber-500 text-white"}`}>{confirmLabel}</button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+const EmployeeModal = ({ open, onClose, onSave, editingEmployee, departments, saving }: {
+  open: boolean; onClose: () => void; onSave: (data: EmployeeFormData) => void;
+  editingEmployee: Employee | null; departments: string[]; saving: boolean;
+}) => {
+  const isEdit = !!editingEmployee;
+  const emptyForm: EmployeeFormData = { name: "", email: "", department: "", role: "Employee", status: "Active" };
+  const [form, setForm] = useState<EmployeeFormData>(emptyForm);
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+
+  useEffect(() => {
+    if (open) {
+      setForm(editingEmployee
+        ? { name: editingEmployee.name, email: editingEmployee.email, department: editingEmployee.department, role: editingEmployee.role, status: editingEmployee.status }
+        : emptyForm);
+      setErrors({});
+    }
+  }, [open, editingEmployee]);
+
+  const set = (field: string, value: string) => {
+    setForm((p) => ({ ...p, [field]: value }));
+    setErrors((p) => ({ ...p, [field]: undefined }));
+  };
+
+  const handleSubmit = () => {
+    const errs = validateEmployee(form, [], editingEmployee?.id);
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    onSave(form);
+  };
+
+  const inputCls = (field: string) =>
+    `w-full bg-[#0f111a] border rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none transition-all
+    ${errors[field] ? "border-red-500/60 focus:border-red-500" : "border-zinc-700 focus:border-blue-500/60"}`;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
+          <motion.div initial={{ scale: 0.92, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.92, opacity: 0, y: 20 }} transition={{ type: "spring" as const, damping: 25, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()} className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center"><User size={17} className="text-blue-400" /></div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">{isEdit ? "Edit Employee" : "Add New Employee"}</h2>
+                  <p className="text-[11px] text-gray-500">{isEdit ? "Update employee details" : "Signup creates Employee only"}</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-700/50 transition-colors"><X size={16} className="text-gray-400" /></button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Full Name *</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input className={`${inputCls("name")} pl-9`} placeholder="e.g. Priya Sharma" value={form.name} onChange={(e) => set("name", e.target.value)} />
+                </div>
+                {errors.name && <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1"><AlertCircle size={10} />{errors.name}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Work Email *</label>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input className={`${inputCls("email")} pl-9`} type="email" placeholder="priya@company.com" value={form.email} onChange={(e) => set("email", e.target.value)} disabled={isEdit} />
+                </div>
+                {errors.email && <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1"><AlertCircle size={10} />{errors.email}</p>}
+                {isEdit && <p className="text-[11px] text-gray-600 mt-1">Email cannot be changed after creation.</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Department *</label>
+                <div className="relative">
+                  <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <select className={`${inputCls("department")} pl-9 appearance-none cursor-pointer`} value={form.department} onChange={(e) => set("department", e.target.value)}>
+                    <option value="">Select department</option>
+                    {departments.map((d) => (<option key={d} value={d}>{d}</option>))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                </div>
+                {errors.department && <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1"><AlertCircle size={10} />{errors.department}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Role *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROLES.map((r) => {
+                    const cfg = roleConfig[r]; const RoleIcon = cfg.icon;
+                    return (
+                      <button key={r} type="button" onClick={() => set("role", r)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all text-xs font-medium
+                          ${form.role === r ? `${cfg.color} border-opacity-60` : "border-zinc-700 text-gray-500 hover:border-zinc-500 hover:text-gray-300"}`}>
+                        <RoleIcon size={13} />
+                        <div><p className="font-semibold">{cfg.label}</p><p className="text-[10px] opacity-70">{cfg.description}</p></div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.role === "Admin" && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                    className="mt-2 flex items-start gap-2 bg-purple-950/40 border border-purple-500/30 rounded-lg px-3 py-2">
+                    <ShieldAlert size={13} className="text-purple-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-purple-300">Admin role grants full system access. Assign with caution.</p>
+                  </motion.div>
+                )}
+              </div>
+              <div className="flex items-center justify-between bg-[#0f111a] border border-zinc-700 rounded-xl px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Account Status</p>
+                  <p className="text-xs text-gray-500">{form.status === "Active" ? "Employee can log in" : "Account is suspended"}</p>
+                </div>
+                <button type="button" onClick={() => set("status", form.status === "Active" ? "Inactive" : "Active")}
+                  className={`relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none ${form.status === "Active" ? "bg-emerald-500" : "bg-zinc-600"}`}>
+                  <motion.span animate={{ x: form.status === "Active" ? 20 : 2 }} transition={{ type: "spring" as const, stiffness: 400, damping: 25 }}
+                    className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-md" />
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-zinc-800 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-gray-400 text-sm hover:border-zinc-500 hover:text-white transition-all">Cancel</button>
+              <button onClick={handleSubmit} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                {saving ? (<><Loader2 size={14} className="animate-spin" /> Saving...</>) : (<><Check size={14} /> {isEdit ? "Update Employee" : "Add Employee"}</>)}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const PromoteModal = ({ open, employee, onClose, onPromote, saving }: {
+  open: boolean; employee: Employee | null; onClose: () => void; onPromote: (id: number, role: string) => void; saving: boolean;
+}) => {
+  const [selectedRole, setSelectedRole] = useState("");
+  useEffect(() => { if (open && employee) setSelectedRole(employee.role); }, [open, employee]);
+
+  return (
+    <AnimatePresence>
+      {open && employee && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
+          <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()} className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+              <div><h2 className="text-sm font-bold text-white">Change Role</h2><p className="text-[11px] text-gray-500">{employee.name}</p></div>
+              <button onClick={onClose}><X size={15} className="text-gray-400 hover:text-white" /></button>
+            </div>
+            <div className="p-5 flex flex-col gap-2">
+              {ROLES.map((r) => {
+                const cfg = roleConfig[r]; const RoleIcon = cfg.icon;
+                return (
+                  <button key={r} onClick={() => setSelectedRole(r)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all
+                      ${selectedRole === r ? `${cfg.color}` : "border-zinc-700 text-gray-400 hover:border-zinc-500 hover:text-white"}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedRole === r ? "" : "bg-zinc-800"}`}><RoleIcon size={15} /></div>
+                    <div><p className="text-sm font-semibold">{r}</p><p className="text-[11px] opacity-70">{cfg.description}</p></div>
+                    {selectedRole === r && <Check size={14} className="ml-auto" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-800 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-gray-400 text-sm hover:border-zinc-500 transition-all">Cancel</button>
+              <button onClick={() => onPromote(employee.id, selectedRole)} disabled={saving || selectedRole === employee.role}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                {saving ? "Updating..." : "Update Role"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// EMPLOYEE DIRECTORY — Main sub-component
+// ─────────────────────────────────────────────────────────────
+const EmployeeDirectory = ({ departments }: { departments: string[] }) => {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("All");
+  const [filterDept, setFilterDept] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [showModal, setShowModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState<Employee | null>(null);
+  const [showPromote, setShowPromote] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+
+  const showToast = (msg: string, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    employeeService.getAll().then(setEmployees).finally(() => setLoading(false));
+  }, []);
+
+  const filtered = useMemo(() => employees.filter((e) => {
+    const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.email.toLowerCase().includes(search.toLowerCase()) || e.department.toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === "All" || e.role === filterRole;
+    const matchDept = filterDept === "All" || e.department === filterDept;
+    const matchStatus = filterStatus === "All" || e.status === filterStatus;
+    return matchSearch && matchRole && matchDept && matchStatus;
+  }), [employees, search, filterRole, filterDept, filterStatus]);
+
+  const stats = useMemo(() => ({
+    total: employees.length,
+    active: employees.filter((e) => e.status === "Active").length,
+    admins: employees.filter((e) => e.role === "Admin").length,
+    managers: employees.filter((e) => e.role === "Asset Manager").length,
+    heads: employees.filter((e) => e.role === "Department Head").length,
+  }), [employees]);
+
+  const handleSave = async (formData: EmployeeFormData) => {
+    setSaving(true);
+    try {
+      if (editingEmployee) {
+        await employeeService.update(editingEmployee.id, { ...editingEmployee, ...formData });
+        setEmployees((prev) => prev.map((e) => e.id === editingEmployee.id ? { ...e, ...formData } : e));
+        showToast(`${formData.name} updated successfully`);
+      } else {
+        const avatar = formData.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+        const created = await employeeService.create({ ...formData, avatar });
+        setEmployees((prev) => [...prev, { ...created, id: created.id ?? Date.now() }]);
+        showToast(`${formData.name} added to directory`);
+      }
+      setShowModal(false);
+      setEditingEmployee(null);
+    } catch { showToast("Failed to save. Please try again.", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = (employee: Employee) => {
+    if (employee.role === "Admin") { showToast("Cannot delete an Admin account.", "error"); return; }
+    setConfirm({
+      title: "Delete Employee", message: `Remove ${employee.name} from the directory? This cannot be undone.`,
+      danger: true, confirmLabel: "Delete",
+      onConfirm: async () => {
+        setConfirm(null);
+        await employeeService.delete(employee.id);
+        setEmployees((prev) => prev.filter((e) => e.id !== employee.id));
+        showToast(`${employee.name} removed from directory`);
+      },
+    });
+  };
+
+  const handleToggleStatus = async (employee: Employee) => {
+    const newStatus = employee.status === "Active" ? "Inactive" : "Active";
+    if (employee.role === "Admin" && newStatus === "Inactive") { showToast("Cannot suspend an Admin account.", "warning"); return; }
+    await employeeService.toggleStatus(employee.id, newStatus);
+    setEmployees((prev) => prev.map((e) => e.id === employee.id ? { ...e, status: newStatus } : e));
+    showToast(`${employee.name} ${newStatus === "Active" ? "reactivated" : "suspended"}`);
+  };
+
+  const handlePromote = async (id: number, role: string) => {
+    setSaving(true);
+    try {
+      await employeeService.promote(id, role);
+      setEmployees((prev) => prev.map((e) => e.id === id ? { ...e, role } : e));
+      showToast(`Role updated to ${role}`);
+      setShowPromote(false); setPromoteTarget(null);
+    } catch { showToast("Failed to update role.", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const openAdd = () => { setEditingEmployee(null); setShowModal(true); };
+  const openEdit = (emp: Employee) => { setEditingEmployee(emp); setShowModal(true); };
+  const openPromote = (emp: Employee) => { setPromoteTarget(emp); setShowPromote(true); };
+
+  return (
+    <div className="space-y-5">
+      <EmployeeToast toast={toast} />
+      <EmployeeConfirmDialog open={!!confirm} title={confirm?.title} message={confirm?.message}
+        danger={confirm?.danger} confirmLabel={confirm?.confirmLabel ?? "Confirm"}
+        onConfirm={confirm?.onConfirm ?? (() => {})} onCancel={() => setConfirm(null)} />
+      <EmployeeModal open={showModal} onClose={() => { setShowModal(false); setEditingEmployee(null); }}
+        onSave={handleSave} editingEmployee={editingEmployee} departments={departments} saving={saving} />
+      <PromoteModal open={showPromote} employee={promoteTarget}
+        onClose={() => { setShowPromote(false); setPromoteTarget(null); }}
+        onPromote={handlePromote} saving={saving} />
+
+      {/* Stats Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: "Total", value: stats.total, color: "text-white" },
+          { label: "Active", value: stats.active, color: "text-emerald-400" },
+          { label: "Admins", value: stats.admins, color: "text-purple-400" },
+          { label: "Managers", value: stats.managers, color: "text-blue-400" },
+          { label: "Dept. Heads", value: stats.heads, color: "text-amber-400" },
+        ].map((s) => (
+          <div key={s.label} className="bg-[#161925] border border-zinc-800 rounded-xl px-4 py-3 text-center">
+            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, email or department..."
+            className="w-full bg-[#161925] border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-colors" />
+          {search && (<button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={13} className="text-gray-500 hover:text-white" /></button>)}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative">
+            <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
+              className="bg-[#161925] border border-zinc-800 rounded-xl pl-3 pr-8 py-2.5 text-sm text-gray-300 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
+              <option value="All">All Roles</option>
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
+              className="bg-[#161925] border border-zinc-800 rounded-xl pl-3 pr-8 py-2.5 text-sm text-gray-300 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
+              <option value="All">All Departments</option>
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+              className="bg-[#161925] border border-zinc-800 rounded-xl pl-3 pr-8 py-2.5 text-sm text-gray-300 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
+              <option value="All">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          </div>
+          <button onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-blue-600/20">
+            <Plus size={15} /> Add Employee
+          </button>
+        </div>
+      </div>
+
+      {/* Results count */}
+      {!loading && (
+        <p className="text-xs text-gray-500">
+          Showing <span className="text-white font-medium">{filtered.length}</span> of <span className="text-white font-medium">{employees.length}</span> employees
+          {(search || filterRole !== "All" || filterDept !== "All" || filterStatus !== "All") && (
+            <button onClick={() => { setSearch(""); setFilterRole("All"); setFilterDept("All"); setFilterStatus("All"); }}
+              className="ml-2 text-blue-400 hover:text-blue-300 hover:underline">Clear filters</button>
+          )}
+        </p>
+      )}
+
+      {/* Table */}
+      <div className="bg-[#161925] border border-zinc-800 rounded-2xl overflow-hidden">
+        {loading && (
+          <div className="py-16 flex flex-col items-center gap-3 text-gray-500">
+            <Loader2 size={28} className="animate-spin text-blue-400" />
+            <p className="text-sm">Loading employee directory...</p>
+          </div>
+        )}
+        {!loading && filtered.length === 0 && (
+          <div className="py-16 flex flex-col items-center gap-3 text-gray-500">
+            <Users size={36} className="opacity-25" />
+            <p className="text-sm font-medium text-gray-400">No employees found</p>
+            <p className="text-xs">Try adjusting your search or filters</p>
+            <button onClick={openAdd} className="mt-2 flex items-center gap-1.5 text-sm text-blue-400 hover:underline"><Plus size={14} /> Add the first employee</button>
+          </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-xs text-gray-500 uppercase tracking-wide">
+                  <th className="px-5 py-3.5 text-left font-medium">Employee</th>
+                  <th className="px-4 py-3.5 text-left font-medium">Department</th>
+                  <th className="px-4 py-3.5 text-left font-medium">Role</th>
+                  <th className="px-4 py-3.5 text-left font-medium">Status</th>
+                  <th className="px-4 py-3.5 text-left font-medium hidden lg:table-cell">Joined</th>
+                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                <AnimatePresence>
+                  {filtered.map((emp, i) => (
+                    <motion.tr key={emp.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}
+                      transition={{ delay: i * 0.03 }} className="hover:bg-zinc-800/30 transition-colors group">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold text-white flex-shrink-0 ${getAvatarColor(emp.id)}`}>{emp.avatar}</div>
+                          <div>
+                            <p className="font-semibold text-white leading-tight">{emp.name}</p>
+                            <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5"><Mail size={9} /> {emp.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5"><span className="flex items-center gap-1.5 text-gray-300 text-xs"><Building2 size={12} className="text-gray-600" />{emp.department}</span></td>
+                      <td className="px-4 py-3.5"><button onClick={() => openPromote(emp)} title="Click to change role" className="hover:scale-105 transition-transform"><RoleBadge role={emp.role} /></button></td>
+                      <td className="px-4 py-3.5"><StatusPill status={emp.status} /></td>
+                      <td className="px-4 py-3.5 text-xs text-gray-500 hidden lg:table-cell">{emp.joinedOn}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => handleToggleStatus(emp)} title={emp.status === "Active" ? "Suspend" : "Reactivate"}
+                            className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${emp.status === "Active" ? "hover:bg-amber-500/15 hover:text-amber-400 text-gray-500" : "hover:bg-emerald-500/15 hover:text-emerald-400 text-gray-500"}`}>
+                            {emp.status === "Active" ? <UserX size={14} /> : <UserCheck size={14} />}
+                          </button>
+                          <button onClick={() => openEdit(emp)} title="Edit" className="p-1.5 rounded-lg text-gray-500 hover:bg-blue-500/15 hover:text-blue-400 transition-all opacity-0 group-hover:opacity-100"><Edit2 size={14} /></button>
+                          <button onClick={() => openPromote(emp)} title="Change role" className="p-1.5 rounded-lg text-gray-500 hover:bg-purple-500/15 hover:text-purple-400 transition-all opacity-0 group-hover:opacity-100"><Shield size={14} /></button>
+                          <button onClick={() => handleDelete(emp)} title="Delete" className="p-1.5 rounded-lg text-gray-500 hover:bg-red-500/15 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* RBAC Info */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+        className="flex items-start gap-3 bg-blue-950/30 border border-blue-500/20 rounded-2xl px-5 py-3">
+        <ShieldCheck size={15} className="text-blue-400 flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-blue-300/80 leading-relaxed">
+          <span className="font-semibold text-blue-300">Role Assignment Policy:</span>{" "}
+          Employees self-register with the <span className="text-white font-medium">Employee</span> role only.
+          Only an <span className="text-purple-300 font-medium">Admin</span> can promote users to{" "}
+          <span className="text-amber-300 font-medium">Department Head</span> or{" "}
+          <span className="text-blue-300 font-medium">Asset Manager</span> here in the Employee Directory.
+          Click any role badge in the table to promote.
+        </p>
+      </motion.div>
+    </div>
+  );
 };
 
 type TabName = "Departments" | "Categories" | "Employees";
@@ -172,14 +752,16 @@ export default function OrganizationSetup() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Organization Setup</h1>
           <p className="text-sm text-gray-400 mt-1">Manage organizational structure and asset classifications.</p>
         </div>
+        {activeTab !== "Employees" && (
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={() => activeTab !== "Employees" ? handleOpenModal() : undefined}
+          onClick={() => handleOpenModal()}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all"
         >
           <Plus size={18} />
-          {activeTab === "Departments" ? "New Department" : activeTab === "Categories" ? "New Category" : "Invite Employee"}
+          {activeTab === "Departments" ? "New Department" : "New Category"}
         </motion.button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -330,12 +912,11 @@ export default function OrganizationSetup() {
         </motion.div>
       )}
 
-      {/* Tab C Placeholder */}
+      {/* ========================================== */}
+      {/* TAB C: EMPLOYEE DIRECTORY                 */}
+      {/* ========================================== */}
       {activeTab === "Employees" && (
-        <div className="py-20 text-center border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-gray-500">
-          <Contact size={40} className="mb-4 opacity-20" />
-          <p>Employee Directory (Tab C) will be built here.</p>
-        </div>
+        <EmployeeDirectory departments={departments.map((d) => d.name)} />
       )}
 
       {/* ========================================== */}

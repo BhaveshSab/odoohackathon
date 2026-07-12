@@ -1,364 +1,382 @@
 import { useState } from "react";
-import {
-  ArrowLeftRight,
-  BarChart3,
-  Building2,
-  CalendarCheck,
-  ChevronDown,
-  ChevronLeft,
-  ClipboardCheck,
-  FolderTree,
-  LayoutDashboard,
-  ScrollText,
-  Wrench,
-  Zap,
-} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  LayoutDashboard,
+  Package,
+  Boxes,
+  Wrench,
+  CalendarCheck,
+  ShieldCheck,
+  Activity,
+  BarChart3,
+  ArrowLeftRight,
+  ClipboardList,
+  BookOpen,
+  User,
+  Crown,
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Bell,
+  Building2,
+} from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
+// ─────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────
+export type Role = "ADMIN" | "ASSET_MANAGER" | "DEPARTMENT_HEAD" | "EMPLOYEE";
 
 interface NavItem {
+  id: string;
   label: string;
   icon: React.ElementType;
-  href?: string;
-  badge?: string;
-  children?: { label: string; href: string }[];
+  badge?: number | null;
+  section?: string;
 }
 
-interface NavSection {
-  heading: string;
-  items: NavItem[];
+export interface SidebarUser {
+  name: string;
+  email: string;
+  role: Role;
+  avatar?: string;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Data                                                               */
-/* ------------------------------------------------------------------ */
+export interface SidebarProps {
+  user: SidebarUser;
+  onSignOut: () => void;
+  activePage: string;
+  onNavigate: (pageId: string) => void;
+  badges?: {
+    pendingTransfers?: number;
+    maintenanceRequests?: number;
+    overdueReturns?: number;
+    notifications?: number;
+  };
+}
 
-const SECTIONS: NavSection[] = [
-  {
-    heading: "MAIN",
-    items: [
-      { label: "Dashboard", icon: LayoutDashboard, href: "/Dashboard" },
-      { label: "Asset Directory", icon: FolderTree, href: "/asset-directory" },
-    ],
-  },
-  {
-    heading: "OPERATIONS",
-    items: [
-      { label: "Allocations & Transfers", icon: ArrowLeftRight, href: "/allocations" },
-      { label: "Resource Booking", icon: CalendarCheck, href: "/resource-booking" },
-      { label: "Maintenance", icon: Wrench, href: "/maintenance" },
-    ],
-  },
-  {
-    heading: "COMPLIANCE & DATA",
-    items: [
-      { label: "Asset Audits", icon: ClipboardCheck, href: "/audits" },
-      { label: "Reports & Analytics", icon: BarChart3, href: "/reports" },
-    ],
-  },
-  {
-    heading: "SYSTEM",
-    items: [
-      { label: "Organization Setup", icon: Building2, href: "/org-setup", badge: "Admin" },
-      { label: "Activity Logs", icon: ScrollText, href: "/activity-logs", badge: "Admin" },
-    ],
-  },
+// ─────────────────────────────────────────────────────────────
+// SIDEBAR NAV CONFIG — RBAC
+// ─────────────────────────────────────────────────────────────
+const ALL_NAV_ITEMS: (NavItem & { allowedRoles: Role[] })[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, section: "MAIN", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD", "EMPLOYEE"] },
+  { id: "asset-directory", label: "Asset Directory", icon: Boxes, section: "MAIN", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD"] },
+
+  { id: "allocations", label: "Allocations & Transfers", icon: ArrowLeftRight, section: "OPERATIONS", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD"] },
+  { id: "booking", label: "Resource Booking", icon: CalendarCheck, section: "OPERATIONS", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD", "EMPLOYEE"] },
+  { id: "maintenance", label: "Maintenance", icon: Wrench, section: "OPERATIONS", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD", "EMPLOYEE"] },
+
+  { id: "my-assets", label: "My Assets", icon: Package, section: "MY WORKSPACE", allowedRoles: ["EMPLOYEE"] },
+  { id: "my-bookings", label: "My Bookings", icon: BookOpen, section: "MY WORKSPACE", allowedRoles: ["EMPLOYEE"] },
+  { id: "my-maintenance", label: "My Requests", icon: ClipboardList, section: "MY WORKSPACE", allowedRoles: ["EMPLOYEE"] },
+
+  { id: "audits", label: "Asset Audits", icon: ShieldCheck, section: "COMPLIANCE & DATA", allowedRoles: ["ADMIN", "ASSET_MANAGER"] },
+  { id: "reports", label: "Reports & Analytics", icon: BarChart3, section: "COMPLIANCE & DATA", allowedRoles: ["ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD"] },
+
+  { id: "organization", label: "Organization Setup", icon: Building2, section: "SYSTEM", allowedRoles: ["ADMIN"] },
+  { id: "activity", label: "Activity Logs", icon: Activity, section: "SYSTEM", allowedRoles: ["ADMIN", "ASSET_MANAGER"] },
 ];
 
-/* ------------------------------------------------------------------ */
-/*  Animation variants                                                  */
-/* ------------------------------------------------------------------ */
-
-const listVariants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.04 },
-  },
+// ─────────────────────────────────────────────────────────────
+// ROLE CONFIG
+// ─────────────────────────────────────────────────────────────
+const roleConfig: Record<Role, { label: string; color: string; icon: React.ElementType }> = {
+  ADMIN:           { label: "Admin",         color: "bg-purple-500/20 text-purple-300 border border-purple-500/30", icon: Crown },
+  ASSET_MANAGER:   { label: "Asset Manager", color: "bg-blue-500/20 text-blue-300 border border-blue-500/30",       icon: ShieldCheck },
+  DEPARTMENT_HEAD: { label: "Dept. Head",    color: "bg-amber-500/20 text-amber-300 border border-amber-500/30",   icon: Briefcase },
+  EMPLOYEE:        { label: "Employee",      color: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30", icon: User },
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, x: -12 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { type: "spring" as const, stiffness: 500, damping: 30 },
-  },
-};
+const avatarColors = ["bg-blue-600", "bg-purple-600", "bg-emerald-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600"];
+const getAvatarColor = (name: string) => avatarColors[name.charCodeAt(0) % avatarColors.length];
 
-const dropdownVariants = {
-  hidden: { opacity: 0, height: 0 },
-  visible: {
-    opacity: 1,
-    height: "auto",
-    transition: { type: "spring" as const, stiffness: 400, damping: 25 },
-  },
-  exit: {
-    opacity: 0,
-    height: 0,
-    transition: { duration: 0.15 },
-  },
-};
+// ─────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────
+const Sidebar = ({ user, onSignOut, activePage, onNavigate, badges = {} }: SidebarProps) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSignout, setShowSignout] = useState(false);
 
-const logoVariants = {
-  hidden: { opacity: 0, scale: 0.8 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    transition: { type: "spring" as const, stiffness: 400, damping: 20 },
-  },
-};
+  const allowedItems = ALL_NAV_ITEMS.filter((item) => item.allowedRoles.includes(user.role));
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
+  const sections = allowedItems.reduce<Record<string, NavItem[]>>((acc, item) => {
+    const sec = item.section ?? "MAIN";
+    if (!acc[sec]) acc[sec] = [];
+    acc[sec].push(item);
+    return acc;
+  }, {});
 
-export interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
-  active?: string;
-  onNavigate?: (href: string) => void;
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
-}
+  const getBadge = (id: string): number | null => {
+    if (id === "allocations") return badges.pendingTransfers ?? null;
+    if (id === "maintenance") return badges.maintenanceRequests ?? null;
+    if (id === "asset-directory") return badges.overdueReturns ?? null;
+    return null;
+  };
 
-export default function Sidebar({
-  className,
-  active = "/Dashboard",
-  onNavigate,
-  collapsed = false,
-  onCollapsedChange,
-  ...props
-}: SidebarProps) {
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const initials = user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const roleCfg = roleConfig[user.role];
+  const RoleIcon = roleCfg.icon;
 
-  const toggleDropdown = (label: string) =>
-    setOpenDropdown((prev) => (prev === label ? null : label));
+  const handleNav = (id: string) => {
+    onNavigate(id);
+    setMobileOpen(false);
+  };
 
   return (
-    <aside
-      className={cn(
-        "relative flex h-screen flex-col border-r border-zinc-800 bg-zinc-950 transition-[width] duration-200",
-        collapsed ? "w-16" : "w-64",
-        className
-      )}
-      {...props}
-    >
-      {/* ── Logo (spring-in) ──────────────────────────────────── */}
-      <motion.div
-        variants={logoVariants}
-        initial="hidden"
-        animate="visible"
-        className="flex h-14 items-center gap-2.5 border-b border-zinc-800 px-4"
-      >
-        <motion.span
-          whileHover={{ rotate: 15, scale: 1.1 }}
-          transition={{ type: "spring", stiffness: 400 }}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white"
-        >
-          <Zap className="h-4 w-4" />
-        </motion.span>
-        <AnimatePresence mode="wait">
-          {!collapsed && (
-            <motion.span
-              key="brand-text"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-              className="text-base font-semibold tracking-tight text-white"
-            >
-              AssetFlow
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* ── Navigation (staggered items) ─────────────────────── */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {SECTIONS.map((section, sIdx) => (
+    <>
+      {/* ── MOBILE OVERLAY ── */}
+      <AnimatePresence>
+        {mobileOpen && (
           <motion.div
-            key={section.heading}
-            variants={listVariants}
-            initial="hidden"
-            animate="visible"
-            transition={{ delay: 0.05 + sIdx * 0.06 }}
-            className="mb-6 first:mb-4"
-          >
-            {/* Section heading — fade in / out with collapse */}
-            <AnimatePresence mode="wait">
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── MOBILE HAMBURGER ── */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-[#1a1d2e] border border-zinc-700 rounded-xl text-gray-400 hover:text-white transition-colors"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
+      {/* ── SIDEBAR ── */}
+      <motion.aside
+        animate={{ width: collapsed ? 68 : 220 }}
+        transition={{ type: "spring" as const, stiffness: 300, damping: 30 }}
+        className={`
+          fixed top-0 left-0 h-screen z-50
+          bg-[#0f111a] border-r border-zinc-800/60
+          flex flex-col
+          shadow-[4px_0_24px_rgba(0,0,0,0.4)]
+          transition-transform duration-300
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+          lg:translate-x-0 lg:relative lg:flex
+        `}
+      >
+        {/* ── LOGO ── */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800/60 flex-shrink-0">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-600/30">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <rect x="2" y="3" width="7" height="7" rx="1.5" />
+                <rect x="15" y="3" width="7" height="7" rx="1.5" />
+                <rect x="2" y="14" width="7" height="7" rx="1.5" />
+                <path d="M15 17.5h7M18.5 14v7" />
+              </svg>
+            </div>
+            <AnimatePresence>
               {!collapsed && (
-                <motion.h3
-                  key={section.heading}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.1 }}
-                  className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-500"
+                <motion.span
+                  initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }}
+                  className="text-base font-extrabold text-white tracking-tight whitespace-nowrap overflow-hidden"
                 >
-                  {section.heading}
-                </motion.h3>
+                  AssetFlow
+                </motion.span>
               )}
             </AnimatePresence>
+          </div>
 
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = item.href === active;
-                const hasChildren = item.children && item.children.length > 0;
-                const isOpen = openDropdown === item.label;
-                const Icon = item.icon;
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="hidden lg:flex p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-zinc-800 transition-all flex-shrink-0"
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        </div>
 
-                return (
-                  <motion.li
-                    key={item.label}
-                    variants={itemVariants}
-                    layout
+        {/* ── NAV SECTIONS ── */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-5">
+          {Object.entries(sections).map(([section, items]) => (
+            <div key={section}>
+              <AnimatePresence>
+                {!collapsed && (
+                  <motion.p
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-1.5"
                   >
-                    <motion.button
-                      type="button"
-                      onClick={() => {
-                        if (hasChildren) return toggleDropdown(item.label);
-                        if (item.href) onNavigate?.(item.href);
-                      }}
-                      whileHover={{ x: 2 }}
-                      whileTap={{ scale: 0.97 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      title={collapsed ? item.label : undefined}
-                      className={cn(
-                        "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                        isActive
-                          ? "bg-blue-600 text-white"
-                          : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100"
-                      )}
-                    >
-                      <motion.div
-                        whileHover={{ scale: 1.15, rotate: 8 }}
-                        transition={{ type: "spring", stiffness: 400 }}
-                      >
-                        <Icon
-                          className={cn(
-                            "h-[18px] w-[18px] shrink-0",
-                            isActive
-                              ? "text-white"
-                              : "text-zinc-500 group-hover:text-zinc-300"
-                          )}
-                        />
-                      </motion.div>
+                    {section}
+                  </motion.p>
+                )}
+              </AnimatePresence>
 
-                      <AnimatePresence mode="wait">
+              <div className="space-y-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activePage === item.id;
+                  const badge = getBadge(item.id);
+
+                  return (
+                    <motion.button
+                      key={item.id}
+                      whileHover={{ x: collapsed ? 0 : 2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleNav(item.id)}
+                      title={collapsed ? item.label : undefined}
+                      className={`
+                        w-full flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-150 text-left relative group
+                        ${isActive
+                          ? "bg-blue-600/20 text-blue-400 border border-blue-500/25 shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent"}
+                        ${collapsed ? "justify-center" : ""}
+                      `}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeBar"
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-400 rounded-full"
+                        />
+                      )}
+
+                      <Icon size={17} className={`flex-shrink-0 ${isActive ? "text-blue-400" : ""}`} />
+
+                      <AnimatePresence>
                         {!collapsed && (
                           <motion.span
-                            key={`label-${item.label}`}
-                            initial={{ opacity: 0, x: -4 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -4 }}
-                            transition={{ duration: 0.12 }}
-                            className="flex-1 text-left"
+                            initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }}
+                            className="text-[13px] font-medium flex-1 whitespace-nowrap overflow-hidden"
                           >
                             {item.label}
                           </motion.span>
                         )}
                       </AnimatePresence>
 
-                      {/* Badge */}
-                      <AnimatePresence mode="wait">
-                        {!collapsed && item.badge && (
-                          <motion.span
-                            key={`badge-${item.label}`}
-                            initial={{ opacity: 0, scale: 0.6 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.6 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                            className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-400"
-                          >
-                            {item.badge}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Chevron */}
-                      <AnimatePresence mode="wait">
-                        {!collapsed && hasChildren && (
-                          <motion.div
-                            key={`chev-${item.label}`}
-                            initial={{ opacity: 0, scale: 0.6 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.6 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                          >
-                            <ChevronDown
-                              className={cn(
-                                "h-3.5 w-3.5 text-zinc-500 transition-transform duration-200",
-                                isOpen && "rotate-180"
-                              )}
-                            />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.button>
-
-                    {/* ── Dropdown children (AnimatePresence) ──── */}
-                    <AnimatePresence>
-                      {hasChildren && isOpen && !collapsed && (
-                        <motion.ul
-                          key={`drop-${item.label}`}
-                          variants={dropdownVariants}
-                          initial="hidden"
-                          animate="visible"
-                          exit="exit"
-                          className="mt-1 overflow-hidden space-y-0.5 pl-10"
-                        >
-                          {item.children!.map((child) => (
-                            <motion.li
-                              key={child.label}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{
-                                type: "spring",
-                                stiffness: 400,
-                                damping: 25,
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => onNavigate?.(child.href)}
-                                className="w-full rounded-md px-3 py-1.5 text-left text-sm text-zinc-500 transition-colors hover:bg-zinc-800/40 hover:text-zinc-200"
-                              >
-                                {child.label}
-                              </button>
-                            </motion.li>
-                          ))}
-                        </motion.ul>
+                      {badge !== null && badge > 0 && !collapsed && (
+                        <span className="flex-shrink-0 text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                          {badge > 99 ? "99+" : badge}
+                        </span>
                       )}
-                    </AnimatePresence>
-                  </motion.li>
-                );
-              })}
-            </ul>
-          </motion.div>
-        ))}
-      </nav>
 
-      {/* ── Collapse toggle (spin on click) ─────────────────── */}
-      <div className="border-t border-zinc-800 p-3">
-        <motion.button
-          type="button"
-          onClick={() => onCollapsedChange?.(!collapsed)}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9, rotate: 90 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
-          className="flex w-full items-center justify-center rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
-        >
+                      {badge !== null && badge > 0 && collapsed && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full" />
+                      )}
+
+                      {collapsed && (
+                        <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap shadow-xl z-50">
+                          {item.label}
+                          {badge !== null && badge > 0 && (
+                            <span className="ml-1.5 text-amber-400">({badge})</span>
+                          )}
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* ── USER PROFILE SECTION ── */}
+        <div className="border-t border-zinc-800/60 p-3 flex-shrink-0">
+          <AnimatePresence>
+            {!collapsed ? (
+              <motion.div
+                key="expanded" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2"
+              >
+                <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-800">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${getAvatarColor(user.name)}`}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                    <p className="text-[10px] text-zinc-500 truncate">{user.email}</p>
+                  </div>
+                  <button className="relative p-1 rounded-lg hover:bg-zinc-700 transition-colors flex-shrink-0">
+                    <Bell size={13} className="text-zinc-400" />
+                    {(badges.notifications ?? 0) > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white font-bold flex items-center justify-center">
+                        {badges.notifications}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold ${roleCfg.color}`}>
+                  <RoleIcon size={11} />
+                  {roleCfg.label}
+                  {user.role === "ADMIN" && (
+                    <span className="ml-auto text-[9px] bg-purple-500/20 px-1 rounded">ADMIN</span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowSignout(true)}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-[12px] font-medium"
+                >
+                  <LogOut size={13} />
+                  Sign Out
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="collapsed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2"
+              >
+                <div
+                  title={`${user.name} — ${roleCfg.label}`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${getAvatarColor(user.name)}`}
+                >
+                  {initials}
+                </div>
+                <button
+                  onClick={() => setShowSignout(true)}
+                  title="Sign Out"
+                  className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  <LogOut size={14} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.aside>
+
+      {/* ── SIGN OUT CONFIRM ── */}
+      <AnimatePresence>
+        {showSignout && (
           <motion.div
-            animate={{ rotate: collapsed ? 180 : 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+            onClick={() => setShowSignout(false)}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+                <LogOut size={22} className="text-red-400" />
+              </div>
+              <h3 className="text-white font-bold text-base mb-1">Sign out of AssetFlow?</h3>
+              <p className="text-gray-400 text-sm mb-6">You'll need to log back in to access your workspace.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSignout(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-gray-400 text-sm hover:border-zinc-500 hover:text-white transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setShowSignout(false); onSignOut(); }}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-all"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.button>
-      </div>
-    </aside>
+        )}
+      </AnimatePresence>
+    </>
   );
-}
+};
+
+export default Sidebar;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import DashboardLayout, { type ViewName } from "@/components/dashboard/DashboardLayout";
+import type { Role, SidebarProps } from "@/components/dashboard/Sidebar";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import ManagerDashboard from "@/components/dashboard/ManagerDashboard";
 import EmployeeDashboard from "@/components/dashboard/EmployeeDashboard";
@@ -14,25 +15,45 @@ import ReportsAnalytics from "@/components/dashboard/ReportsAnalytics";
 import OrganizationSetup from "@/components/dashboard/OrganizationSetup";
 import { clearSession, getSession, type AuthResponse } from "@/lib/auth";
 
-/* Quick-action string → ViewName mapping */
+/* ------------------------------------------------------------------ */
+/*  Role resolver — email-based for now, replace with backend later    */
+/* ------------------------------------------------------------------ */
+const getUserRole = (email: string): Role => {
+  if (email === "bhavesh.cool2005@gmail.com") return "ADMIN";
+  if (email === "bhavesh.sabnani2005@gmail.com") return "ASSET_MANAGER";
+  return "EMPLOYEE";
+};
+
+/* ------------------------------------------------------------------ */
+/*  Navigation mapping — sidebar pageIds + quick-action strings       */
+/* ------------------------------------------------------------------ */
 const NAVIGATE_MAP: Record<string, ViewName> = {
-  organization: "OrganizationSetup",
+  // Sidebar pageIds
+  dashboard: "Dashboard",
+  "asset-directory": "AssetDirectory",
+  allocations: "AllocationsTransfers",
   booking: "ResourceBooking",
   maintenance: "Maintenance",
-  allocations: "AllocationsTransfers",
+  audits: "AssetAudits",
+  reports: "ReportsAnalytics",
+  organization: "OrganizationSetup",
+  activity: "AssetAudits",
+  // Quick-action strings from dashboards
   transfers: "AllocationsTransfers",
   register: "AssetDirectory",
   assets: "AssetDirectory",
-  activity: "AssetAudits",
+  "my-assets": "AssetDirectory",
+  "my-bookings": "ResourceBooking",
+  "my-maintenance": "Maintenance",
 };
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
-
 export default function Dashboard() {
   const [session, setSession] = useState<AuthResponse | null>(getSession());
   const [currentView, setCurrentView] = useState<ViewName>("Dashboard");
+  const [activePage, setActivePage] = useState("dashboard");
 
   useEffect(() => {
     setSession(getSession());
@@ -45,16 +66,36 @@ export default function Dashboard() {
     setSession(null);
   };
 
-  /** Map quick-action strings from AdminDashboard to ViewName. */
-  const handleNavigate = (screen: string) => {
-    const view = NAVIGATE_MAP[screen];
+  /** Sidebar nav + quick-action strings → ViewName */
+  const handleNavigate = (pageId: string) => {
+    setActivePage(pageId);
+    const view = NAVIGATE_MAP[pageId];
     if (view) setCurrentView(view);
+  };
+
+  /** Build sidebar props from session */
+  const role = getUserRole(session.user.email);
+  const sidebarProps: SidebarProps = {
+    user: {
+      name: session.user.name,
+      email: session.user.email,
+      role,
+    },
+    onSignOut: handleSignOut,
+    activePage,
+    onNavigate: handleNavigate,
+    badges: {
+      pendingTransfers: 0,
+      maintenanceRequests: 0,
+      overdueReturns: 0,
+      notifications: 0,
+    },
   };
 
   return (
     <DashboardLayout
       currentView={currentView}
-      onViewChange={setCurrentView}
+      sidebarProps={sidebarProps}
     >
       {currentView === "Dashboard" && (
         session.user.email === "bhavesh.sabnani2005@gmail.com"
@@ -65,17 +106,11 @@ export default function Dashboard() {
       )}
 
       {currentView === "AssetDirectory" && <AssetDirectory />}
-
       {currentView === "AllocationsTransfers" && <AllocationsTransfers />}
-
       {currentView === "ResourceBooking" && <ResourceBooking />}
-
       {currentView === "Maintenance" && <Maintenance />}
-
       {currentView === "AssetAudits" && <AssetAudits />}
-
       {currentView === "ReportsAnalytics" && <ReportsAnalytics />}
-
       {currentView === "OrganizationSetup" && <OrganizationSetup />}
     </DashboardLayout>
   );
