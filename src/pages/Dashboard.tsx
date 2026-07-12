@@ -15,6 +15,9 @@ import SalesOverview from "@/components/dashboard/SalesOverview";
 import AssetDirectory from "@/components/dashboard/AssetDirectory";
 import AllocationsTransfers from "@/components/dashboard/AllocationsTransfers";
 import ResourceBooking from "@/components/dashboard/ResourceBooking";
+import Maintenance from "@/components/dashboard/Maintenance";
+import AssetAudits from "@/components/dashboard/AssetAudits";
+import ReportsAnalytics from "@/components/dashboard/ReportsAnalytics";
 import { clearSession, getSession, type AuthResponse } from "@/lib/auth";
 
 /* ------------------------------------------------------------------ */
@@ -185,6 +188,12 @@ export default function Dashboard() {
       {currentView === "AllocationsTransfers" && <AllocationsTransfers />}
 
       {currentView === "ResourceBooking" && <ResourceBooking />}
+
+      {currentView === "Maintenance" && <Maintenance />}
+
+      {currentView === "AssetAudits" && <AssetAudits />}
+
+      {currentView === "ReportsAnalytics" && <ReportsAnalytics />}
     </DashboardLayout>
   );
 }

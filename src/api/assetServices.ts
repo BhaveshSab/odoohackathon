@@ -203,3 +203,136 @@ export async function getResourceSlots(
   ];
   // ----------------------------------------------------------------
 }
+
+// =============================================
+// MAINTENANCE API
+// =============================================
+
+export interface MaintenanceRequest {
+  id: string;
+  assetName: string;
+  assetTag: string;
+  issue: string;
+  priority: string;
+  status: string;
+  requestedBy: string;
+  date: string;
+  technician?: string;
+}
+
+/**
+ * Fetches all maintenance requests with status, priority, and assignment info.
+ *
+ * TODO: Replace the mock data below with:
+ *   const response = await axios.get('YOUR_BACKEND_URL/api/maintenance');
+ *   return response.data;
+ */
+export async function getMaintenanceRequests(): Promise<MaintenanceRequest[]> {
+  // --- Simulated API call (remove when connecting real backend) ---
+  await new Promise((resolve) => setTimeout(resolve, 800));
+
+  return [
+    { id: "REQ-082", assetName: "Sony A7IV Camera", assetTag: "AF-005", issue: "Lens mount is loose and throwing error 0x99. Needs recalibration.", priority: "High", status: "Pending", requestedBy: "Raj Patel", date: "2026-07-12" },
+    { id: "REQ-081", assetName: "Delivery Van (Ford Transit)", assetTag: "AF-002", issue: "Check engine light on, strange noise from transmission.", priority: "High", status: "In Progress", requestedBy: "Logistics Dept", date: "2026-07-10", technician: "Mike Auto Services" },
+    { id: "REQ-079", assetName: "MacBook Pro M2", assetTag: "AF-001", issue: "Battery expanding slightly, trackpad getting stiff.", priority: "Medium", status: "Approved", requestedBy: "Priya Sharma", date: "2026-07-08" },
+    { id: "REQ-075", assetName: "Conference Table", assetTag: "AF-006", issue: "One leg is wobbly, needs tightening.", priority: "Low", status: "Resolved", requestedBy: "Admin Team", date: "2026-07-01" },
+  ];
+  // ----------------------------------------------------------------
+}
+
+// =============================================
+// AUDIT CYCLES API
+// =============================================
+
+export interface AuditProgress {
+  total: number;
+  verified: number;
+  missing: number;
+  damaged: number;
+}
+
+export interface AuditCycle {
+  id: string;
+  title: string;
+  scope: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  progress: AuditProgress;
+  auditors: string[];
+}
+
+/**
+ * Fetches all audit cycles with progress tracking and discrepancy data.
+ *
+ * TODO: Replace the mock data below with:
+ *   const response = await axios.get('YOUR_BACKEND_URL/api/audits');
+ *   return response.data;
+ */
+export async function getAuditCycles(): Promise<AuditCycle[]> {
+  // --- Simulated API call (remove when connecting real backend) ---
+  await new Promise((resolve) => setTimeout(resolve, 800));
+
+  return [
+    { id: "AUD-2026-Q3-01", title: "Q3 IT Equipment Verification", scope: "HQ - Floors 2 & 3", startDate: "2026-08-01", endDate: "2026-08-15", status: "In Progress", progress: { total: 240, verified: 185, missing: 2, damaged: 4 }, auditors: ["PS", "AK"] },
+    { id: "AUD-2026-Q3-02", title: "Logistics Vehicle Fleet Check", scope: "Warehouse A & B", startDate: "2026-08-10", endDate: "2026-08-12", status: "Draft", progress: { total: 18, verified: 0, missing: 0, damaged: 0 }, auditors: ["LD"] },
+    { id: "AUD-2026-Q2-01", title: "Q2 Office Furniture Audit", scope: "All HQ Branches", startDate: "2026-04-01", endDate: "2026-04-20", status: "Completed", progress: { total: 450, verified: 445, missing: 5, damaged: 12 }, auditors: ["JD", "PS", "RP"] },
+  ];
+  // ----------------------------------------------------------------
+}
+
+// =============================================
+// ANALYTICS API
+// =============================================
+
+export interface AnalyticsData {
+  kpis: {
+    totalAssets: number;
+    utilizationRate: number;
+    maintenancePending: number;
+    activeBookings: number;
+  };
+  utilizationTrend: { month: string; rate: number }[];
+  departmentAllocations: { dept: string; count: number }[];
+  assetStatus: { name: string; value: number; color: string }[];
+  bookingHeatmap: { day: string; hour: string; intensity: number }[][];
+}
+
+/**
+ * Fetches analytics data for the Reports & Analytics dashboard.
+ *
+ * TODO: Replace the mock data below with:
+ *   const response = await axios.get('YOUR_BACKEND_URL/api/analytics', {
+ *     params: { range: timeRange }
+ *   });
+ *   return response.data;
+ */
+export async function getAnalytics(timeRange: string): Promise<AnalyticsData> {
+  // --- Simulated API call (remove when connecting real backend) ---
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  void timeRange;
+
+  return {
+    kpis: { totalAssets: 1248, utilizationRate: 78, maintenancePending: 14, activeBookings: 45 },
+    utilizationTrend: [
+      { month: "Mar", rate: 65 }, { month: "Apr", rate: 68 }, { month: "May", rate: 72 },
+      { month: "Jun", rate: 75 }, { month: "Jul", rate: 82 }, { month: "Aug", rate: 78 },
+    ],
+    departmentAllocations: [
+      { dept: "Engineering", count: 420 }, { dept: "Sales", count: 210 },
+      { dept: "Design", count: 180 }, { dept: "Marketing", count: 150 }, { dept: "HR & Admin", count: 95 },
+    ],
+    assetStatus: [
+      { name: "Allocated", value: 850, color: "#3b82f6" }, { name: "Available", value: 310, color: "#10b981" },
+      { name: "Maintenance", value: 65, color: "#f59e0b" }, { name: "Lost/Retired", value: 23, color: "#ef4444" },
+    ],
+    bookingHeatmap: Array.from({ length: 5 }, (_, dayIdx) =>
+      Array.from({ length: 8 }, (_, hourIdx) => ({
+        day: ["Mon", "Tue", "Wed", "Thu", "Fri"][dayIdx],
+        hour: `${hourIdx + 9}AM`,
+        intensity: Math.floor(Math.random() * 10),
+      }))
+    ),
+  };
+  // ----------------------------------------------------------------
+}
