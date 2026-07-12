@@ -11,9 +11,14 @@ import {
   Armchair,
   Box,
   AlertCircle,
+  CheckCircle2,
+  X,
 } from "lucide-react";
 
 import { getAssets, type Asset } from "@/api/assetServices";
+import AllocateAssetModal, { type Asset as ModalAsset } from "@/components/dashboard/AllocateAssetModal";
+
+interface Toast { msg: string; type: string; }
 
 // Animation variants for staggered row entrance
 const containerVariants = {
@@ -60,6 +65,14 @@ export default function AssetDirectory() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showAllocate, setShowAllocate] = useState(false);
+  const [preSelectedAsset, setPreSelectedAsset] = useState<ModalAsset | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const showToast = (msg: string, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // ==========================================
   // BACKEND INTEGRATION: Fetch Asset Data
@@ -102,6 +115,14 @@ export default function AssetDirectory() {
       animate={{ opacity: 1, y: 0 }}
       className="w-full space-y-6"
     >
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-medium shadow-xl border ${toast.type === "error" ? "bg-red-950 border-red-500/40 text-red-300" : "bg-emerald-950 border-emerald-500/40 text-emerald-300"}`}
+          >{toast.type === "error" ? <X size={14} className="inline mr-1.5" /> : <CheckCircle2 size={14} className="inline mr-1.5" />}{toast.msg}</motion.div>
+        )}
+      </AnimatePresence>
       {/* --- Page Header --- */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -115,6 +136,7 @@ export default function AssetDirectory() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          onClick={() => { setPreSelectedAsset(null); setShowAllocate(true); }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-900/20 transition-colors"
         >
           <Plus size={16} />
@@ -284,9 +306,26 @@ export default function AssetDirectory() {
                           </span>
                         </td>
                         <td className="py-4 px-6 text-right">
-                          <button className="text-gray-500 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
-                            <MoreVertical size={18} />
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {asset.status === "Available" && (
+                              <button
+                                onClick={() => {
+                                  setPreSelectedAsset({
+                                    ...asset,
+                                    condition: "Good",
+                                    status: "Available",
+                                  } as ModalAsset);
+                                  setShowAllocate(true);
+                                }}
+                                className="px-2.5 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors"
+                              >
+                                Allocate
+                              </button>
+                            )}
+                            <button className="text-gray-500 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
+                              <MoreVertical size={18} />
+                            </button>
+                          </div>
                         </td>
                       </motion.tr>
                     ))
@@ -297,6 +336,19 @@ export default function AssetDirectory() {
           </table>
         </div>
       </div>
+
+      {/* Allocate Asset Modal */}
+      <AllocateAssetModal
+        open={showAllocate}
+        onClose={() => { setShowAllocate(false); setPreSelectedAsset(null); }}
+        onSuccess={(allocationId) => {
+          setShowAllocate(false);
+          setPreSelectedAsset(null);
+          showToast(`Asset allocated successfully! ID: ${allocationId}`);
+          getAssets().then(setAssets).catch(() => {});
+        }}
+        preSelectedAsset={preSelectedAsset}
+      />
     </motion.div>
   );
 }

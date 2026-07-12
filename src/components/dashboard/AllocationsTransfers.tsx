@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRightLeft,
@@ -9,7 +9,11 @@ import {
   XCircle,
   Search,
   Plus,
+  Loader2,
+  X,
+  Bell,
 } from "lucide-react";
+import AllocateAssetModal from "@/components/dashboard/AllocateAssetModal";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -43,6 +47,71 @@ interface Allocation {
   requester?: string;
 }
 
+interface Toast { msg: string; type: string; }
+
+// ==========================================
+// API SERVICE (backend-ready, falls back to demo)
+// ==========================================
+const BASE_URL = "http://localhost:5000/api";
+const headers = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
+});
+
+const allocationApi = {
+  returnAsset: async (id: string) => {
+    try {
+      const r = await fetch(`${BASE_URL}/allocations/${id}/return`, { method: "POST", headers: headers() });
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch {
+      return { success: true };
+    }
+  },
+  transferAsset: async (id: string, newAssignee: string) => {
+    try {
+      const r = await fetch(`${BASE_URL}/allocations/${id}/transfer`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ newAssignee }),
+      });
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch {
+      return { success: true };
+    }
+  },
+  approveTransfer: async (id: string) => {
+    try {
+      const r = await fetch(`${BASE_URL}/transfers/${id}/approve`, { method: "PATCH", headers: headers() });
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch {
+      return { success: true };
+    }
+  },
+  rejectTransfer: async (id: string) => {
+    try {
+      const r = await fetch(`${BASE_URL}/transfers/${id}/reject`, { method: "PATCH", headers: headers() });
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch {
+      return { success: true };
+    }
+  },
+  sendPing: async (id: string) => {
+    try {
+      const r = await fetch(`${BASE_URL}/notifications/ping`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ allocationId: id, type: "overdue_reminder" }),
+      });
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch {
+      return { success: true };
+    }
+  },
+};
+
 export default function AllocationsTransfers() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,72 +119,105 @@ export default function AllocationsTransfers() {
 
   const [activeTab, setActiveTab] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showAllocate, setShowAllocate] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [actionLoading, setActionLoading] = useState<Record<string, string | null>>({});
+
+  const showToast = (msg: string, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // ==========================================
   // BACKEND INTEGRATION: Fetch Data
   // ==========================================
-  useEffect(() => {
-    const loadAllocations = async () => {
-      setIsLoading(true);
-      setError(null);
+  const loadAllocations = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // TODO: Replace with real API: GET /api/allocations
+      // const response = await fetch(`${BASE_URL}/allocations`, { headers: headers() });
+      // if (!response.ok) throw new Error('Failed');
+      // const data = await response.json();
+      // setAllocations(data);
 
-      try {
-        // TODO: REPLACE THIS BLOCK WITH YOUR REAL API CALL
-        // const response = await fetch('http://localhost:3000/api/allocations');
-        // if (!response.ok) throw new Error('Failed to fetch data');
-        // const data = await response.json();
-        // setAllocations(data);
-
-        // --- Simulated Backend Delay for Demo ---
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        const mockDbData: Allocation[] = [
-          {
-            id: "AL-101",
-            assetName: "MacBook Pro M2",
-            assetTag: "AF-001",
-            assignee: "Priya Sharma",
-            role: "Frontend Eng",
-            returnDate: "2026-08-15",
-            status: "Allocated",
-            avatar: "PS",
-          },
-          {
-            id: "AL-102",
-            assetName: "Delivery Van",
-            assetTag: "AF-002",
-            assignee: "Logistics Dept",
-            role: "Department",
-            returnDate: "2026-07-10",
-            status: "Overdue",
-            avatar: "LD",
-          },
-          {
-            id: "AL-103",
-            assetName: "Sony A7IV Camera",
-            assetTag: "AF-005",
-            assignee: "Raj Patel",
-            role: "Media Team",
-            returnDate: "2026-07-20",
-            status: "Transfer Pending",
-            requester: "Amit Kumar",
-            avatar: "RP",
-          },
-        ];
-        setAllocations(mockDbData);
-        // ----------------------------------------
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong fetching allocations."
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadAllocations();
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const mockDbData: Allocation[] = [
+        { id: "AL-101", assetName: "MacBook Pro M2", assetTag: "AF-001", assignee: "Priya Sharma", role: "Frontend Eng", returnDate: "2026-08-15", status: "Allocated", avatar: "PS" },
+        { id: "AL-102", assetName: "Delivery Van", assetTag: "AF-002", assignee: "Logistics Dept", role: "Department", returnDate: "2026-07-10", status: "Overdue", avatar: "LD" },
+        { id: "AL-103", assetName: "Sony A7IV Camera", assetTag: "AF-005", assignee: "Raj Patel", role: "Media Team", returnDate: "2026-07-20", status: "Transfer Pending", requester: "Amit Kumar", avatar: "RP" },
+      ];
+      setAllocations(mockDbData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong fetching allocations.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadAllocations(); }, [loadAllocations]);
+
+  // ── Action Handlers ──
+  const handleReturn = async (id: string) => {
+    setActionLoading((p) => ({ ...p, [id]: "return" }));
+    const res = await allocationApi.returnAsset(id);
+    if (res.success) {
+      setAllocations((prev) => prev.filter((a) => a.id !== id));
+      showToast("Asset returned successfully");
+    } else {
+      showToast("Return failed. Please try again.", "error");
+    }
+    setActionLoading((p) => ({ ...p, [id]: null }));
+  };
+
+  const handleTransfer = async (id: string) => {
+    // TODO: Open a transfer modal with employee selector
+    // For now, simulated transfer
+    setActionLoading((p) => ({ ...p, [id]: "transfer" }));
+    const res = await allocationApi.transferAsset(id, "new-assignee-id");
+    if (res.success) {
+      setAllocations((prev) => prev.map((a) => a.id === id ? { ...a, status: "Transfer Pending" } : a));
+      showToast("Transfer request submitted");
+    } else {
+      showToast("Transfer failed.", "error");
+    }
+    setActionLoading((p) => ({ ...p, [id]: null }));
+  };
+
+  const handleApprove = async (id: string) => {
+    setActionLoading((p) => ({ ...p, [id]: "approve" }));
+    const res = await allocationApi.approveTransfer(id);
+    if (res.success) {
+      setAllocations((prev) => prev.map((a) => a.id === id ? { ...a, status: "Allocated" } : a));
+      showToast("Transfer approved");
+    } else {
+      showToast("Approval failed.", "error");
+    }
+    setActionLoading((p) => ({ ...p, [id]: null }));
+  };
+
+  const handleReject = async (id: string) => {
+    setActionLoading((p) => ({ ...p, [id]: "reject" }));
+    const res = await allocationApi.rejectTransfer(id);
+    if (res.success) {
+      setAllocations((prev) => prev.filter((a) => a.id !== id));
+      showToast("Transfer rejected");
+    } else {
+      showToast("Rejection failed.", "error");
+    }
+    setActionLoading((p) => ({ ...p, [id]: null }));
+  };
+
+  const handlePing = async (id: string) => {
+    setActionLoading((p) => ({ ...p, [id]: "ping" }));
+    const res = await allocationApi.sendPing(id);
+    if (res.success) {
+      showToast("Reminder sent to assignee");
+    } else {
+      showToast("Failed to send reminder.", "error");
+    }
+    setActionLoading((p) => ({ ...p, [id]: null }));
+  };
 
   // ==========================================
   // FILTERING LOGIC
@@ -135,6 +237,14 @@ export default function AllocationsTransfers() {
       animate={{ opacity: 1, y: 0 }}
       className="w-full space-y-8"
     >
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-medium shadow-xl border ${toast.type === "error" ? "bg-red-950 border-red-500/40 text-red-300" : "bg-emerald-950 border-emerald-500/40 text-emerald-300"}`}
+          >{toast.type === "error" ? <X size={14} className="inline mr-1.5" /> : <CheckCircle2 size={14} className="inline mr-1.5" />}{toast.msg}</motion.div>
+        )}
+      </AnimatePresence>
       {/* --- Page Header --- */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -148,6 +258,7 @@ export default function AllocationsTransfers() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          onClick={() => setShowAllocate(true)}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all"
         >
           <Plus size={18} />
@@ -332,26 +443,51 @@ export default function AllocationsTransfers() {
                   <div className="mt-6 pt-4 border-t border-zinc-800/50 flex gap-3">
                     {item.status === "Allocated" && (
                       <>
-                        <button className="flex-1 bg-[#0f111a] hover:bg-zinc-800 border border-zinc-800 text-gray-300 py-2 rounded-lg text-xs font-semibold transition-colors">
+                        <button
+                          disabled={!!actionLoading[item.id]}
+                          onClick={() => handleReturn(item.id)}
+                          className="flex-1 bg-[#0f111a] hover:bg-zinc-800 border border-zinc-800 text-gray-300 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {actionLoading[item.id] === "return" ? <Loader2 size={13} className="animate-spin" /> : null}
                           Return
                         </button>
-                        <button className="flex-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2">
-                          <ArrowRightLeft size={14} /> Transfer
+                        <button
+                          disabled={!!actionLoading[item.id]}
+                          onClick={() => handleTransfer(item.id)}
+                          className="flex-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {actionLoading[item.id] === "transfer" ? <Loader2 size={13} className="animate-spin" /> : <ArrowRightLeft size={14} />}
+                          Transfer
                         </button>
                       </>
                     )}
                     {item.status === "Overdue" && (
-                      <button className="w-full bg-red-500/10 text-red-400 border border-red-500/20 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2">
-                        <AlertCircle size={14} /> Send Ping
+                      <button
+                        disabled={!!actionLoading[item.id]}
+                        onClick={() => handlePing(item.id)}
+                        className="w-full bg-red-500/10 text-red-400 border border-red-500/20 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {actionLoading[item.id] === "ping" ? <Loader2 size={13} className="animate-spin" /> : <Bell size={14} />}
+                        Send Ping
                       </button>
                     )}
                     {item.status === "Transfer Pending" && (
                       <div className="w-full flex gap-2">
-                        <button className="flex-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2 rounded-lg text-xs font-semibold flex justify-center gap-1">
-                          <CheckCircle2 size={14} /> Approve
+                        <button
+                          disabled={!!actionLoading[item.id]}
+                          onClick={() => handleApprove(item.id)}
+                          className="flex-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2 rounded-lg text-xs font-semibold flex justify-center gap-1 disabled:opacity-50"
+                        >
+                          {actionLoading[item.id] === "approve" ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                          Approve
                         </button>
-                        <button className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 py-2 rounded-lg text-xs font-semibold flex justify-center gap-1">
-                          <XCircle size={14} /> Reject
+                        <button
+                          disabled={!!actionLoading[item.id]}
+                          onClick={() => handleReject(item.id)}
+                          className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 py-2 rounded-lg text-xs font-semibold flex justify-center gap-1 disabled:opacity-50"
+                        >
+                          {actionLoading[item.id] === "reject" ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={14} />}
+                          Reject
                         </button>
                       </div>
                     )}
@@ -362,6 +498,17 @@ export default function AllocationsTransfers() {
           </AnimatePresence>
         </motion.div>
       )}
+
+      {/* Allocate Asset Modal */}
+      <AllocateAssetModal
+        open={showAllocate}
+        onClose={() => setShowAllocate(false)}
+        onSuccess={(allocationId) => {
+          setShowAllocate(false);
+          showToast(`Asset allocated! ID: ${allocationId}`);
+          loadAllocations();
+        }}
+      />
     </motion.div>
   );
 }

@@ -1,419 +1,1078 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Wrench,
-  Search,
-  Plus,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  User,
-  Calendar,
-  MoreVertical,
-  Activity,
-  AlertCircle,
+  Plus, Search, AlertTriangle, Clock, CheckCircle2,
+  Activity, Wrench, X, ChevronDown, User, Calendar,
+  FileText, Loader2, Check, MoreVertical,
+  Package, UserCheck, AlertCircle, Download,
+  ClipboardList, Camera, Filter,
 } from "lucide-react";
 
-// Animation variants
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
-};
-
-const cardVariants = {
-  hidden: {
-    opacity: 0,
-    y: 20,
-    scale: 0.95,
-  },
-  show: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { type: "spring" as const, stiffness: 300, damping: 24 },
-  },
-  exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
-};
+// ─────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────
+type Status   = "Pending" | "Approved" | "In Progress" | "Resolved" | "Rejected";
+type Priority = "HIGH" | "MEDIUM" | "LOW";
 
 interface MaintenanceRequest {
-  id: string;
-  assetName: string;
-  assetTag: string;
-  issue: string;
-  priority: string;
-  status: string;
+  id:          string;
+  reqId:       string;
+  assetName:   string;
+  assetTag:    string;
+  issue:       string;
+  priority:    Priority;
+  status:      Status;
   requestedBy: string;
-  date: string;
+  raisedOn:    string;
   technician?: string;
+  photo?:      string;
 }
 
-// Styling helpers
-const getPriorityStyles = (priority: string) => {
-  switch (priority?.toLowerCase()) {
-    case "high":
-      return "bg-red-500/10 text-red-400 border-red-500/20";
-    case "medium":
-      return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    case "low":
-      return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-    default:
-      return "bg-gray-500/10 text-gray-400 border-gray-500/20";
-  }
+interface RaiseRequestPayload {
+  assetId:     string;
+  assetTag:    string;
+  assetName:   string;
+  issue:       string;
+  priority:    Priority;
+  requestedBy: string;
+  photo?:      string;
+}
+
+interface AssetOption {
+  id: string;
+  assetTag: string;
+  name: string;
+}
+
+interface Technician {
+  id: string;
+  name: string;
+  specialty: string;
+}
+
+export interface MaintenanceProps {
+  userRole?: "ADMIN" | "ASSET_MANAGER" | "EMPLOYEE";
+  currentUser?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SERVICE LAYER  (swap BASE_URL when backend is ready)
+// ─────────────────────────────────────────────────────────────
+const BASE_URL = "http://localhost:5000/api";
+
+const authHeaders = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
+});
+
+const DUMMY_REQUESTS: MaintenanceRequest[] = [
+  { id: "1", reqId: "REQ-082", assetName: "Sony A7IV Camera",           assetTag: "AF-005", issue: "Lens mount is loose and throwing error 0x99. Needs recalibration.", priority: "HIGH",   status: "Pending",     requestedBy: "Raj Patel",      raisedOn: "2026-07-12" },
+  { id: "2", reqId: "REQ-081", assetName: "Delivery Van (Ford Transit)", assetTag: "AF-002", issue: "Check engine light on, strange noise from transmission.",           priority: "HIGH",   status: "In Progress", requestedBy: "Logistics Dept", raisedOn: "2026-07-10", technician: "Mike Ross" },
+  { id: "3", reqId: "REQ-079", assetName: "MacBook Pro M2",             assetTag: "AF-001", issue: "Battery expanding slightly, trackpad getting stiff.",               priority: "MEDIUM", status: "Approved",    requestedBy: "Priya Sharma",  raisedOn: "2026-07-08" },
+  { id: "4", reqId: "REQ-075", assetName: "Conference Table",           assetTag: "AF-006", issue: "One leg is wobbly, needs tightening.",                              priority: "LOW",    status: "Resolved",    requestedBy: "Admin Team",    raisedOn: "2026-07-01" },
+  { id: "5", reqId: "REQ-070", assetName: "HP LaserJet Printer",       assetTag: "AF-011", issue: "Paper jam after every 3rd print. Roller may need replacement.",     priority: "MEDIUM", status: "Pending",     requestedBy: "Sara Ali",      raisedOn: "2026-07-11" },
+  { id: "6", reqId: "REQ-068", assetName: "Air Conditioning Unit",     assetTag: "AF-022", issue: "Not cooling below 26°C even at full blast.",                        priority: "HIGH",   status: "Approved",    requestedBy: "Amit Verma",    raisedOn: "2026-07-09" },
+];
+
+const DUMMY_ASSETS: AssetOption[] = [
+  { id: "a1", assetTag: "AF-001", name: "MacBook Pro M2"              },
+  { id: "a2", assetTag: "AF-002", name: "Delivery Van (Ford Transit)" },
+  { id: "a3", assetTag: "AF-005", name: "Sony A7IV Camera"            },
+  { id: "a4", assetTag: "AF-011", name: "HP LaserJet Printer"         },
+  { id: "a5", assetTag: "AF-022", name: "Air Conditioning Unit"       },
+  { id: "a6", assetTag: "AF-031", name: "Dell Monitor 27\""           },
+  { id: "a7", assetTag: "AF-044", name: "Toyota Innova"               },
+];
+
+const DUMMY_TECHNICIANS: Technician[] = [
+  { id: "t1", name: "Mike Ross",      specialty: "Electronics"  },
+  { id: "t2", name: "Harvey Specter", specialty: "Vehicles"     },
+  { id: "t3", name: "Rachel Zane",    specialty: "Furniture"    },
+  { id: "t4", name: "Louis Litt",     specialty: "IT / Servers" },
+];
+
+const maintenanceService = {
+  getAll: async (): Promise<MaintenanceRequest[]> => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      return await res.json();
+    } catch { return DUMMY_REQUESTS; }
+  },
+
+  raiseRequest: async (payload: RaiseRequestPayload) => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      return await res.json();
+    } catch {
+      return {
+        id: `req-${Date.now()}`,
+        reqId: `REQ-${Math.floor(Math.random() * 900) + 100}`,
+        ...payload,
+        status: "Pending" as Status,
+        raisedOn: new Date().toISOString().split("T")[0],
+      };
+    }
+  },
+
+  approve: async (id: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance/${id}/approve`, {
+        method: "PATCH", headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch { return true; }
+  },
+
+  reject: async (id: string, reason: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance/${id}/reject`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch { return true; }
+  },
+
+  assignTechnician: async (id: string, technicianId: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance/${id}/assign-technician`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify({ technicianId }),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch { return true; }
+  },
+
+  resolve: async (id: string, notes: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/maintenance/${id}/resolve`, {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify({ resolutionNotes: notes }),
+      });
+      if (!res.ok) throw new Error();
+      return true;
+    } catch { return true; }
+  },
+
+  getAssets: async (): Promise<AssetOption[]> => {
+    try {
+      const res = await fetch(`${BASE_URL}/assets`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      return await res.json();
+    } catch { return DUMMY_ASSETS; }
+  },
+
+  exportPdf: (requests: MaintenanceRequest[]) => {
+    const rows = requests.map((r) =>
+      `<tr style="border-bottom:1px solid #333">
+        <td style="padding:8px">${r.reqId}</td>
+        <td style="padding:8px">${r.assetName}</td>
+        <td style="padding:8px">${r.assetTag}</td>
+        <td style="padding:8px">${r.priority}</td>
+        <td style="padding:8px">${r.status}</td>
+        <td style="padding:8px">${r.requestedBy}</td>
+        <td style="padding:8px">${r.raisedOn}</td>
+      </tr>`
+    ).join("");
+
+    const html = `
+      <html><head><title>Maintenance Report</title>
+      <style>body{font-family:Arial;color:#fff;background:#0f111a;padding:24px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{background:#1a1d2e;padding:10px 8px;text-align:left;color:#60a5fa}
+      td{color:#d1d5db}</style></head>
+      <body>
+        <h2 style="color:#fff;margin-bottom:4px">AssetFlow — Maintenance Report</h2>
+        <p style="color:#6b7280;margin-bottom:20px">Generated: ${new Date().toLocaleString()}</p>
+        <table>
+          <thead><tr>
+            <th>Req ID</th><th>Asset</th><th>Tag</th>
+            <th>Priority</th><th>Status</th><th>Requested By</th><th>Date</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body></html>`;
+
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); w.print(); }
+  },
 };
 
-const getStatusStyles = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case "pending":
-      return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    case "approved":
-      return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-    case "in progress":
-      return "bg-purple-500/10 text-purple-400 border-purple-500/20";
-    case "resolved":
-      return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    default:
-      return "bg-gray-500/10 text-gray-400 border-gray-500/20";
-  }
+// ─────────────────────────────────────────────────────────────
+// STATUS & PRIORITY CONFIG
+// ─────────────────────────────────────────────────────────────
+const statusConfig: Record<Status, { color: string; icon: React.ElementType }> = {
+  Pending:       { color: "bg-amber-500/20 text-amber-400 border-amber-500/30",         icon: Clock        },
+  Approved:      { color: "bg-blue-500/20 text-blue-400 border-blue-500/30",            icon: CheckCircle2 },
+  "In Progress": { color: "bg-purple-500/20 text-purple-400 border-purple-500/30",      icon: Activity     },
+  Resolved:      { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",   icon: CheckCircle2 },
+  Rejected:      { color: "bg-red-500/20 text-red-400 border-red-500/30",               icon: X            },
 };
 
-export default function Maintenance() {
-  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const priorityConfig: Record<Priority, { color: string; bg: string }> = {
+  HIGH:   { color: "text-red-400",     bg: "bg-red-500/15 border border-red-500/30"     },
+  MEDIUM: { color: "text-amber-400",   bg: "bg-amber-500/15 border border-amber-500/30" },
+  LOW:    { color: "text-emerald-400", bg: "bg-emerald-500/15 border border-emerald-500/30" },
+};
 
-  const [activeTab, setActiveTab] = useState("All");
-  const [searchTerm, setSearchTerm] = useState("");
+// ─────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────
+const Toast = ({ toast }: { toast: { msg: string; type: string } | null }) => (
+  <AnimatePresence>
+    {toast && (
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 40 }}
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-xl text-sm font-medium shadow-2xl border flex items-center gap-2 whitespace-nowrap
+          ${toast.type === "error"   ? "bg-red-950 border-red-500/40 text-red-300"
+          : toast.type === "warning" ? "bg-amber-950 border-amber-500/40 text-amber-300"
+          :                            "bg-emerald-950 border-emerald-500/40 text-emerald-300"}`}
+      >
+        {toast.type === "error" ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}
+        {toast.msg}
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 
-  // ==========================================
-  // BACKEND INTEGRATION: Fetch Maintenance Data
-  // ==========================================
-  useEffect(() => {
-    const fetchMaintenanceRequests = async () => {
-      setIsLoading(true);
-      setError(null);
+// ─────────────────────────────────────────────────────────────
+// BADGES
+// ─────────────────────────────────────────────────────────────
+const StatusBadge = ({ status }: { status: Status }) => {
+  const cfg  = statusConfig[status];
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
+      <Icon size={11} /> {status}
+    </span>
+  );
+};
 
-      try {
-        // TODO: Replace with your actual backend API call
-        // const response = await fetch('/api/maintenance');
-        // if (!response.ok) throw new Error('Failed to fetch data');
-        // const data = await response.json();
-        // setRequests(data);
+const PriorityBadge = ({ priority }: { priority: Priority }) => {
+  const cfg = priorityConfig[priority];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${cfg.bg} ${cfg.color}`}>
+      <AlertTriangle size={9} /> {priority}
+    </span>
+  );
+};
 
-        // --- Simulated Backend Delay ---
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+// ─────────────────────────────────────────────────────────────
+// RAISE REQUEST MODAL
+// ─────────────────────────────────────────────────────────────
+const RaiseRequestModal = ({
+  open, onClose, onSuccess, currentUser = "Current User",
+}: { open: boolean; onClose: () => void; onSuccess: (req: MaintenanceRequest) => void; currentUser?: string }) => {
 
-        const mockRequests: MaintenanceRequest[] = [
-          {
-            id: "REQ-082",
-            assetName: "Sony A7IV Camera",
-            assetTag: "AF-005",
-            issue:
-              "Lens mount is loose and throwing error 0x99. Needs recalibration.",
-            priority: "High",
-            status: "Pending",
-            requestedBy: "Raj Patel",
-            date: "2026-07-12",
-          },
-          {
-            id: "REQ-081",
-            assetName: "Delivery Van (Ford Transit)",
-            assetTag: "AF-002",
-            issue:
-              "Check engine light on, strange noise from transmission.",
-            priority: "High",
-            status: "In Progress",
-            requestedBy: "Logistics Dept",
-            date: "2026-07-10",
-            technician: "Mike Auto Services",
-          },
-          {
-            id: "REQ-079",
-            assetName: "MacBook Pro M2",
-            assetTag: "AF-001",
-            issue: "Battery expanding slightly, trackpad getting stiff.",
-            priority: "Medium",
-            status: "Approved",
-            requestedBy: "Priya Sharma",
-            date: "2026-07-08",
-          },
-          {
-            id: "REQ-075",
-            assetName: "Conference Table",
-            assetTag: "AF-006",
-            issue: "One leg is wobbly, needs tightening.",
-            priority: "Low",
-            status: "Resolved",
-            requestedBy: "Admin Team",
-            date: "2026-07-01",
-          },
-        ];
+  const [assets,      setAssets]      = useState<AssetOption[]>([]);
+  const [fetching,    setFetching]    = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetOpen,   setAssetOpen]   = useState(false);
+  const [errors,      setErrors]      = useState<Record<string, string>>({});
+  const fileRef = useRef<HTMLInputElement>(null);
 
-        setRequests(mockRequests);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load maintenance requests."
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchMaintenanceRequests();
-  }, []);
-
-  // ==========================================
-  // FILTERING LOGIC
-  // ==========================================
-  const filteredRequests = requests.filter((req) => {
-    const matchesSearch =
-      req.assetName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.issue.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTab =
-      activeTab === "All"
-        ? true
-        : req.status.toLowerCase() === activeTab.toLowerCase();
-    return matchesSearch && matchesTab;
+  const [form, setForm] = useState({
+    asset:    null as AssetOption | null,
+    issue:    "",
+    priority: "MEDIUM" as Priority,
+    photo:    "",
   });
+
+  useEffect(() => {
+    if (!open) return;
+    setFetching(true);
+    maintenanceService.getAssets().then(setAssets).finally(() => setFetching(false));
+    setForm({ asset: null, issue: "", priority: "MEDIUM", photo: "" });
+    setErrors({});
+    setAssetSearch("");
+  }, [open]);
+
+  const filteredAssets = useMemo(() =>
+    assetSearch ? assets.filter(a =>
+      a.name.toLowerCase().includes(assetSearch.toLowerCase()) ||
+      a.assetTag.toLowerCase().includes(assetSearch.toLowerCase())
+    ) : assets, [assets, assetSearch]);
+
+  const set = (field: string, value: unknown) => {
+    setForm(p => ({ ...p, [field]: value }));
+    setErrors(p => ({ ...p, [field]: "" }));
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.asset) e.asset = "Please select an asset";
+    if (!form.issue.trim()) e.issue = "Describe the issue";
+    else if (form.issue.trim().length < 10) e.issue = "Please provide more detail (min 10 chars)";
+    return e;
+  };
+
+  const handleSubmit = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setSubmitting(true);
+    try {
+      const payload: RaiseRequestPayload = {
+        assetId:     form.asset!.id,
+        assetTag:    form.asset!.assetTag,
+        assetName:   form.asset!.name,
+        issue:       form.issue.trim(),
+        priority:    form.priority,
+        requestedBy: currentUser,
+        photo:       form.photo || undefined,
+      };
+      const result = await maintenanceService.raiseRequest(payload);
+      onSuccess(result as MaintenanceRequest);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputCls = (field: string) =>
+    `w-full bg-[#0f111a] border rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition-all
+    ${errors[field] ? "border-red-500/60" : "border-zinc-700 focus:border-blue-500/60"}`;
+
+  if (!open) return null;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.93, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.93, opacity: 0, y: 20 }}
+            transition={{ type: "spring" as const, damping: 26, stiffness: 300 }}
+            onClick={e => e.stopPropagation()}
+            className="bg-[#1a1d2e] border border-zinc-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[95vh] flex flex-col"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                  <Wrench size={17} className="text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">Raise Maintenance Request</h2>
+                  <p className="text-[11px] text-zinc-500">Report a broken or faulty asset for repair</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-700/50 transition-colors">
+                <X size={16} className="text-zinc-400" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              {/* Asset Selector */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  Asset <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAssetOpen(o => !o)}
+                    className={`w-full flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-left transition-all text-sm
+                      ${errors.asset ? "border-red-500/60" : assetOpen ? "border-blue-500/60" : "border-zinc-700 hover:border-zinc-600"}
+                      bg-[#0f111a]`}
+                  >
+                    <Package size={14} className="text-zinc-500 flex-shrink-0" />
+                    <span className={form.asset ? "text-white flex-1" : "text-zinc-600 flex-1"}>
+                      {form.asset ? `${form.asset.name} (${form.asset.assetTag})` : "Search and select asset…"}
+                    </span>
+                    <ChevronDown size={13} className={`text-zinc-500 transition-transform ${assetOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {assetOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                        className="absolute z-50 top-full mt-1.5 w-full bg-[#1a1d2e] border border-zinc-700 rounded-xl shadow-2xl overflow-hidden"
+                      >
+                        <div className="p-2 border-b border-zinc-800">
+                          <div className="relative">
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                            <input autoFocus value={assetSearch} onChange={e => setAssetSearch(e.target.value)}
+                              placeholder="Search assets…"
+                              className="w-full bg-[#0f111a] border border-zinc-700 rounded-lg pl-7 pr-3 py-1.5 text-xs text-white outline-none focus:border-blue-500/50" />
+                          </div>
+                        </div>
+                        <div className="max-h-44 overflow-y-auto">
+                          {fetching ? (
+                            <div className="py-4 text-center text-xs text-zinc-500 flex items-center justify-center gap-1.5">
+                              <Loader2 size={13} className="animate-spin" /> Loading…
+                            </div>
+                          ) : filteredAssets.length === 0 ? (
+                            <div className="py-4 text-center text-xs text-zinc-500">No assets found</div>
+                          ) : filteredAssets.map(a => (
+                            <button key={a.id} type="button"
+                              onClick={() => { set("asset", a); setAssetOpen(false); setAssetSearch(""); }}
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-zinc-700/40 transition-colors text-left"
+                            >
+                              <Package size={13} className="text-blue-400 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm text-white">{a.name}</p>
+                                <p className="text-[11px] text-zinc-500">{a.assetTag}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                {errors.asset && <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1"><AlertTriangle size={10} />{errors.asset}</p>}
+              </div>
+
+              {/* Issue Description */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  Issue Description <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <FileText size={14} className="absolute left-3.5 top-3 text-zinc-500" />
+                  <textarea
+                    value={form.issue}
+                    onChange={e => set("issue", e.target.value)}
+                    placeholder="Describe the problem in detail…"
+                    rows={3}
+                    className={`${inputCls("issue")} pl-9 resize-none`}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  {errors.issue
+                    ? <p className="text-red-400 text-[11px] flex items-center gap-1"><AlertTriangle size={10} />{errors.issue}</p>
+                    : <span />}
+                  <span className="text-[11px] text-zinc-600 ml-auto">{form.issue.length}/500</span>
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2">Priority</label>
+                <div className="flex gap-2">
+                  {(["HIGH", "MEDIUM", "LOW"] as Priority[]).map(p => {
+                    const cfg = priorityConfig[p];
+                    return (
+                      <button key={p} type="button" onClick={() => set("priority", p)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-bold transition-all
+                          ${form.priority === p ? `${cfg.bg} ${cfg.color}` : "border-zinc-700 text-zinc-500 hover:border-zinc-600"}`}
+                      >
+                        <AlertTriangle size={11} /> {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Photo upload */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Attach Photo (optional)</label>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-700 hover:border-zinc-500 transition-colors text-sm text-zinc-500 hover:text-zinc-300"
+                >
+                  <Camera size={16} />
+                  {form.photo ? "Photo attached ✓" : "Click to attach a photo of the issue"}
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) set("photo", e.target.files[0].name); }} />
+              </div>
+
+              {form.priority === "HIGH" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                  className="flex items-center gap-2.5 bg-red-950/30 border border-red-500/25 rounded-xl px-4 py-2.5"
+                >
+                  <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+                  <p className="text-[11px] text-red-300">
+                    HIGH priority requests must be approved by an Asset Manager before work begins.
+                    Asset will be marked <span className="font-bold">Under Maintenance</span> on approval.
+                  </p>
+                </motion.div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-zinc-800 flex gap-3 flex-shrink-0">
+              <button onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 hover:text-white transition-all">
+                Cancel
+              </button>
+              <button onClick={handleSubmit} disabled={submitting}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {submitting
+                  ? <><Loader2 size={14} className="animate-spin" /> Submitting…</>
+                  : <><Wrench size={14} /> Raise Request</>}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// ASSIGN TECHNICIAN MODAL
+// ─────────────────────────────────────────────────────────────
+const AssignTechnicianModal = ({
+  open, request, onClose, onSuccess,
+}: { open: boolean; request: MaintenanceRequest | null; onClose: () => void; onSuccess: (id: string) => void }) => {
+  const [selected,   setSelected]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (open) setSelected(""); }, [open]);
+
+  const handleAssign = async () => {
+    if (!selected || !request) return;
+    setSubmitting(true);
+    await maintenanceService.assignTechnician(request.id, selected);
+    setSubmitting(false);
+    onSuccess(selected);
+  };
+
+  return (
+    <AnimatePresence>
+      {open && request && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.93, opacity: 0 }}
+            transition={{ type: "spring" as const, damping: 26, stiffness: 300 }}
+            onClick={e => e.stopPropagation()}
+            className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                  <UserCheck size={15} className="text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Assign Technician</h3>
+                  <p className="text-[11px] text-zinc-500">{request.assetName}</p>
+                </div>
+              </div>
+              <button onClick={onClose}><X size={15} className="text-zinc-400 hover:text-white" /></button>
+            </div>
+
+            <div className="p-5 space-y-2">
+              {DUMMY_TECHNICIANS.map(t => (
+                <button key={t.id} onClick={() => setSelected(t.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left
+                    ${selected === t.id
+                      ? "border-blue-500/50 bg-blue-500/10 text-white"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-white"}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                    {t.name.split(" ").map(n => n[0]).join("")}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{t.name}</p>
+                    <p className="text-[11px] text-zinc-500">{t.specialty}</p>
+                  </div>
+                  {selected === t.id && <Check size={14} className="text-blue-400" />}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-5 py-4 border-t border-zinc-800 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-all">
+                Cancel
+              </button>
+              <button onClick={handleAssign} disabled={!selected || submitting}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                {submitting ? "Assigning…" : "Assign"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// RESOLVE MODAL
+// ─────────────────────────────────────────────────────────────
+const ResolveModal = ({
+  open, request, onClose, onSuccess,
+}: { open: boolean; request: MaintenanceRequest | null; onClose: () => void; onSuccess: () => void }) => {
+  const [notes,      setNotes]      = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleResolve = async () => {
+    if (!request) return;
+    setSubmitting(true);
+    await maintenanceService.resolve(request.id, notes);
+    setSubmitting(false);
+    onSuccess();
+  };
+
+  return (
+    <AnimatePresence>
+      {open && request && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.93, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.93, opacity: 0 }}
+            transition={{ type: "spring" as const, damping: 26, stiffness: 300 }}
+            onClick={e => e.stopPropagation()}
+            className="bg-[#1a1d2e] border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+                  <CheckCircle2 size={15} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Mark as Resolved</h3>
+                  <p className="text-[11px] text-zinc-500">{request.assetName}</p>
+                </div>
+              </div>
+              <button onClick={onClose}><X size={15} className="text-zinc-400 hover:text-white" /></button>
+            </div>
+
+            <div className="p-5">
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Resolution Notes (optional)</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="What was done to fix the issue?"
+                rows={3}
+                className="w-full bg-[#0f111a] border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/50 transition-colors resize-none" />
+              <p className="text-[11px] text-zinc-600 mt-2">
+                The asset status will automatically revert to <span className="text-white font-medium">Available</span> after resolution.
+              </p>
+            </div>
+
+            <div className="px-5 py-4 border-t border-zinc-800 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-all">
+                Cancel
+              </button>
+              <button onClick={handleResolve} disabled={submitting}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {submitting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                {submitting ? "Resolving…" : "Mark Resolved"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// THREE-DOT ACTION MENU
+// ─────────────────────────────────────────────────────────────
+const ActionMenu = ({
+  request, onExport, onClose,
+}: { request: MaintenanceRequest; onExport: () => void; onClose: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9, y: -8 }}
+    animate={{ opacity: 1, scale: 1, y: 0 }}
+    exit={{ opacity: 0, scale: 0.9, y: -8 }}
+    className="absolute right-0 top-8 z-50 w-44 bg-[#1a1d2e] border border-zinc-700 rounded-xl shadow-2xl overflow-hidden"
+    onClick={e => e.stopPropagation()}
+  >
+    {[
+      { label: "View Details",   icon: ClipboardList, action: () => {} },
+      { label: "Export PDF",     icon: Download,      action: onExport  },
+    ].map(({ label, icon: Icon, action }) => (
+      <button key={label} onClick={() => { action(); onClose(); }}
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-zinc-400 hover:bg-zinc-700/50 hover:text-white transition-colors">
+        <Icon size={13} /> {label}
+      </button>
+    ))}
+  </motion.div>
+);
+
+// ─────────────────────────────────────────────────────────────
+// MAINTENANCE CARD
+// ─────────────────────────────────────────────────────────────
+const MaintenanceCard = ({
+  request, onApprove, onReject, onAssign, onResolve, userRole, delay, onExportSingle,
+}: {
+  request: MaintenanceRequest;
+  onApprove: () => void;
+  onReject: () => void;
+  onAssign: () => void;
+  onResolve: () => void;
+  userRole: "ADMIN" | "ASSET_MANAGER" | "EMPLOYEE";
+  delay: number;
+  onExportSingle: () => void;
+}) => {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [menuOpen,      setMenuOpen]      = useState(false);
+
+  const handleApprove = async () => {
+    setActionLoading("approve");
+    onApprove();
+    setTimeout(() => setActionLoading(null), 400);
+  };
+
+  const handleReject = async () => {
+    setActionLoading("reject");
+    onReject();
+    setTimeout(() => setActionLoading(null), 400);
+  };
+
+  const isManager = userRole === "ADMIN" || userRole === "ASSET_MANAGER";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="w-full space-y-8"
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ delay, duration: 0.3 }}
+      className="bg-[#1a1d2e] border border-zinc-800/80 rounded-2xl p-5 flex flex-col gap-4 hover:border-zinc-700 transition-colors"
     >
-      {/* --- Page Header --- */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base font-bold text-white leading-tight">{request.assetName}</h3>
+          <p className="text-[11px] text-zinc-500 mt-0.5">{request.assetTag} • {request.reqId}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <StatusBadge status={request.status} />
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+              className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700/50 transition-colors"
+            >
+              <MoreVertical size={14} />
+            </button>
+            <AnimatePresence>
+              {menuOpen && (
+                <ActionMenu
+                  request={request}
+                  onExport={onExportSingle}
+                  onClose={() => setMenuOpen(false)}
+                />
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[#0f111a] border border-zinc-800 rounded-xl p-3.5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Issue Description</span>
+          <PriorityBadge priority={request.priority} />
+        </div>
+        <p className="text-xs text-zinc-300 leading-relaxed">{request.issue}</p>
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+        <span className="flex items-center gap-1.5"><User size={11} /> {request.requestedBy}</span>
+        <span className="flex items-center gap-1.5"><Calendar size={11} /> {request.raisedOn}</span>
+      </div>
+
+      {request.technician && (
+        <div className="flex items-center gap-1.5 text-[11px] text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-1.5">
+          <UserCheck size={11} /> Technician: {request.technician}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        {request.status === "Pending" && isManager && (
+          <>
+            <button onClick={handleApprove} disabled={!!actionLoading}
+              className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 disabled:opacity-60">
+              {actionLoading === "approve" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Approve
+            </button>
+            <button onClick={handleReject} disabled={!!actionLoading}
+              className="flex-1 py-2 rounded-xl bg-zinc-700/60 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 disabled:opacity-60">
+              {actionLoading === "reject" ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+              Reject
+            </button>
+          </>
+        )}
+
+        {request.status === "Approved" && isManager && (
+          <button onClick={onAssign}
+            className="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
+            <UserCheck size={12} /> Assign Technician
+          </button>
+        )}
+
+        {request.status === "In Progress" && isManager && (
+          <button onClick={onResolve}
+            className="flex-1 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
+            <CheckCircle2 size={12} /> Mark as Resolved
+          </button>
+        )}
+
+        {request.status === "Resolved" && (
+          <button disabled
+            className="flex-1 py-2 rounded-xl bg-zinc-800/50 text-zinc-600 text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5">
+            <CheckCircle2 size={12} /> Closed
+          </button>
+        )}
+
+        {request.status === "Rejected" && (
+          <button disabled
+            className="flex-1 py-2 rounded-xl bg-red-950/30 text-red-500 text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-1.5">
+            <X size={12} /> Rejected
+          </button>
+        )}
+
+        {request.status === "Pending" && !isManager && (
+          <button disabled
+            className="flex-1 py-2 rounded-xl bg-amber-950/30 text-amber-500 text-xs cursor-not-allowed flex items-center justify-center gap-1.5">
+            <Clock size={12} /> Awaiting Approval
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// MAIN PAGE COMPONENT
+// ─────────────────────────────────────────────────────────────
+type FilterTab = "All" | "Pending" | "Approved" | "In Progress" | "Resolved";
+
+const Maintenance = ({
+  userRole = "ASSET_MANAGER",
+  currentUser = "Current User",
+}: MaintenanceProps) => {
+
+  const [requests,     setRequests]     = useState<MaintenanceRequest[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [activeTab,    setActiveTab]    = useState<FilterTab>("All");
+  const [toast,        setToast]        = useState<{ msg: string; type: string } | null>(null);
+  const [exporting,    setExporting]    = useState(false);
+
+  const [showRaise,      setShowRaise]      = useState(false);
+  const [showAssign,     setShowAssign]     = useState(false);
+  const [showResolve,    setShowResolve]    = useState(false);
+  const [activeRequest,  setActiveRequest]  = useState<MaintenanceRequest | null>(null);
+
+  const showToast = (msg: string, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const loadRequests = async () => {
+    setLoading(true);
+    const data = await maintenanceService.getAll();
+    setRequests(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadRequests(); }, []);
+
+  const filtered = useMemo(() => {
+    return requests.filter(r => {
+      const matchTab = activeTab === "All" || r.status === activeTab;
+      const matchSearch = !search ||
+        r.assetName.toLowerCase().includes(search.toLowerCase()) ||
+        r.assetTag.toLowerCase().includes(search.toLowerCase()) ||
+        r.reqId.toLowerCase().includes(search.toLowerCase()) ||
+        r.issue.toLowerCase().includes(search.toLowerCase());
+      return matchTab && matchSearch;
+    });
+  }, [requests, activeTab, search]);
+
+  const counts = useMemo(() => ({
+    All:           requests.length,
+    Pending:       requests.filter(r => r.status === "Pending").length,
+    Approved:      requests.filter(r => r.status === "Approved").length,
+    "In Progress": requests.filter(r => r.status === "In Progress").length,
+    Resolved:      requests.filter(r => r.status === "Resolved").length,
+  }), [requests]);
+
+  const handleApprove = async (req: MaintenanceRequest) => {
+    await maintenanceService.approve(req.id);
+    setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "Approved" } : r));
+    showToast(`${req.assetName} approved for maintenance`);
+  };
+
+  const handleReject = async (req: MaintenanceRequest) => {
+    await maintenanceService.reject(req.id, "Rejected by manager");
+    setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "Rejected" } : r));
+    showToast(`Request ${req.reqId} rejected`, "warning");
+  };
+
+  const handleAssignSuccess = (technicianId: string) => {
+    const tech = DUMMY_TECHNICIANS.find(t => t.id === technicianId);
+    if (!activeRequest) return;
+    setRequests(prev => prev.map(r =>
+      r.id === activeRequest.id ? { ...r, status: "In Progress" as Status, technician: tech?.name } : r
+    ));
+    setShowAssign(false);
+    setActiveRequest(null);
+    showToast(`Technician ${tech?.name} assigned — status set to In Progress`);
+  };
+
+  const handleResolveSuccess = () => {
+    if (!activeRequest) return;
+    setRequests(prev => prev.map(r =>
+      r.id === activeRequest.id ? { ...r, status: "Resolved" as Status } : r
+    ));
+    setShowResolve(false);
+    setActiveRequest(null);
+    showToast(`${activeRequest.assetName} marked as Resolved — asset returned to Available`);
+  };
+
+  const handleExportPdf = () => {
+    setExporting(true);
+    setTimeout(() => {
+      maintenanceService.exportPdf(filtered);
+      setExporting(false);
+      showToast("PDF report generated successfully");
+    }, 600);
+  };
+
+  const TABS: FilterTab[] = ["All", "Pending", "Approved", "In Progress", "Resolved"];
+
+  return (
+    <div className="w-full">
+      <Toast toast={toast} />
+
+      <RaiseRequestModal
+        open={showRaise}
+        onClose={() => setShowRaise(false)}
+        currentUser={currentUser}
+        onSuccess={(req) => {
+          setRequests(prev => [req, ...prev]);
+          setShowRaise(false);
+          showToast(`Request ${req.reqId} raised — pending approval`);
+        }}
+      />
+      <AssignTechnicianModal
+        open={showAssign}
+        request={activeRequest}
+        onClose={() => { setShowAssign(false); setActiveRequest(null); }}
+        onSuccess={handleAssignSuccess}
+      />
+      <ResolveModal
+        open={showResolve}
+        request={activeRequest}
+        onClose={() => { setShowResolve(false); setActiveRequest(null); }}
+        onSuccess={handleResolveSuccess}
+      />
+
+      {/* HEADER */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Maintenance Management
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Track repair requests, approvals, and resolution workflows.
-          </p>
+          <h1 className="text-2xl font-bold text-white">Maintenance Management</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Track repair requests, approvals, and resolution workflows.</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all"
-        >
-          <Plus size={18} />
-          Raise Request
-        </motion.button>
-      </div>
-
-      {/* --- Filters & Search Toolbar --- */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="flex p-1 bg-[#161925] border border-zinc-800/80 rounded-xl w-full lg:w-auto overflow-x-auto">
-          {["All", "Pending", "Approved", "In Progress", "Resolved"].map(
-            (tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`whitespace-nowrap px-6 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab
-                    ? "bg-zinc-800 text-white shadow-sm"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-zinc-800/50"
-                }`}
-              >
-                {tab}
-              </button>
-            )
-          )}
-        </div>
-
-        <div className="relative w-full md:w-80">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-            size={16}
-          />
-          <input
-            type="text"
-            placeholder="Search by asset, ID, or issue..."
-            className="w-full bg-[#161925] border border-zinc-800/80 text-white text-sm rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-zinc-600"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* --- Error State --- */}
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-4 text-red-400">
-          <AlertCircle size={20} />
-          <p className="text-sm">{error}</p>
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => window.location.reload()}
-            className="ml-auto underline text-sm hover:text-red-300"
+            onClick={handleExportPdf}
+            disabled={exporting || filtered.length === 0}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-zinc-700 bg-[#1a1d2e] text-zinc-400 text-sm hover:border-zinc-500 hover:text-white transition-all disabled:opacity-50"
           >
-            Retry Fetch
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Export PDF
+          </button>
+          <button
+            onClick={() => setShowRaise(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-all shadow-lg shadow-blue-600/20"
+          >
+            <Plus size={15} /> Raise Request
           </button>
         </div>
-      )}
+      </div>
 
-      {/* --- Loading Skeletons --- */}
-      {isLoading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {[1, 2, 3, 4].map((n) => (
-            <div
-              key={n}
-              className="bg-[#161925] border border-zinc-800 rounded-2xl p-6 h-72 animate-pulse flex flex-col justify-between"
+      {/* FILTER TABS + SEARCH */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center bg-[#1a1d2e] border border-zinc-800 rounded-xl p-1 gap-0.5">
+          {TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5
+                ${activeTab === tab
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-200"}`}
             >
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <div className="h-6 bg-zinc-800 rounded w-1/2"></div>
-                  <div className="h-6 bg-zinc-800 rounded-full w-20"></div>
-                </div>
-                <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
-                <div className="h-16 bg-[#0f111a] rounded-xl w-full mt-4"></div>
-              </div>
-              <div className="flex gap-3 mt-4 border-t border-zinc-800/50 pt-4">
-                <div className="h-10 bg-zinc-800 rounded-lg w-full"></div>
-              </div>
-            </div>
+              {tab}
+              {counts[tab] > 0 && activeTab !== tab && (
+                <span className="text-[10px] bg-zinc-700/60 px-1.5 py-0.5 rounded-full">{counts[tab]}</span>
+              )}
+            </button>
           ))}
         </div>
-      )}
 
-      {/* --- Data Grid --- */}
-      {!isLoading && !error && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-        >
-          <AnimatePresence>
-            {filteredRequests.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500"
-              >
-                <Wrench size={48} className="mb-4 opacity-20" />
-                <p>No maintenance requests found.</p>
-              </motion.div>
-            ) : (
-              filteredRequests.map((req) => (
-                <motion.div
-                  key={req.id}
-                  variants={cardVariants}
-                  layout
-                  className="relative overflow-hidden bg-[#161925] border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-6 shadow-xl flex flex-col justify-between group transition-colors"
-                >
-                  {/* Subtle Background Glow based on Priority */}
-                  <div
-                    className={`absolute -top-10 -right-10 w-40 h-40 blur-[50px] opacity-10 rounded-full pointer-events-none transition-colors ${
-                      req.priority === "High"
-                        ? "bg-red-500"
-                        : req.priority === "Medium"
-                        ? "bg-amber-500"
-                        : "bg-blue-500"
-                    }`}
-                  ></div>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by asset, ID, or issue…"
+            className="bg-[#1a1d2e] border border-zinc-800 rounded-xl pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-blue-500/50 transition-colors w-72"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+              <X size={13} className="text-zinc-500 hover:text-white" />
+            </button>
+          )}
+        </div>
+      </div>
 
-                  <div>
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-bold text-gray-100 group-hover:text-blue-400 transition-colors line-clamp-1">
-                            {req.assetName}
-                          </h3>
-                        </div>
-                        <p className="text-xs text-zinc-500 font-mono mt-1">
-                          {req.assetTag} • {req.id}
-                        </p>
-                      </div>
-
-                      {/* Status Badge */}
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${getStatusStyles(req.status)}`}
-                      >
-                        {req.status === "Pending" && <Clock size={12} />}
-                        {req.status === "Approved" && <CheckCircle2 size={12} />}
-                        {req.status === "In Progress" && <Activity size={12} />}
-                        {req.status === "Resolved" && <CheckCircle2 size={12} />}
-                        {req.status}
-                      </span>
-                    </div>
-
-                    {/* Issue Description Box */}
-                    <div className="mt-4 bg-[#0f111a] p-4 rounded-xl border border-zinc-800/50">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Issue Description
-                        </span>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${getPriorityStyles(req.priority)}`}
-                        >
-                          {req.priority === "High" && (
-                            <AlertTriangle size={10} className="mr-1" />
-                          )}
-                          {req.priority}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-300 line-clamp-2 leading-relaxed">
-                        {req.issue}
-                      </p>
-                    </div>
-
-                    <div className="flex justify-between items-end mt-4 px-1">
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <User size={14} className="text-zinc-500" />
-                        <span className="truncate max-w-[120px]">
-                          {req.requestedBy}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Calendar size={14} className="text-zinc-500" />
-                        <span>{req.date}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contextual Action Buttons based on Workflow Status */}
-                  <div className="mt-6 pt-4 border-t border-zinc-800/50 flex gap-3">
-                    {req.status === "Pending" && (
-                      <>
-                        <button className="flex-1 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 py-2 rounded-lg text-xs font-semibold transition-colors flex justify-center items-center gap-1">
-                          Approve
-                        </button>
-                        <button className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-gray-300 border border-zinc-700 py-2 rounded-lg text-xs font-semibold transition-colors">
-                          Reject
-                        </button>
-                      </>
-                    )}
-
-                    {req.status === "Approved" && (
-                      <button className="w-full bg-[#0f111a] hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-gray-300 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2">
-                        <Wrench size={14} /> Assign Technician
-                      </button>
-                    )}
-
-                    {req.status === "In Progress" && (
-                      <button className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2">
-                        <CheckCircle2 size={14} /> Mark as Resolved
-                      </button>
-                    )}
-
-                    {req.status === "Resolved" && (
-                      <button className="w-full bg-[#0f111a] border border-zinc-800 text-zinc-500 py-2 rounded-lg text-xs font-semibold cursor-not-allowed flex items-center justify-center gap-2">
-                        Closed
-                      </button>
-                    )}
-
-                    <button className="p-2 text-gray-500 hover:text-white hover:bg-zinc-800 rounded-lg border border-transparent hover:border-zinc-700 transition-colors">
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))
-            )}
+      {/* CARDS GRID */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+          <Loader2 size={22} className="animate-spin text-blue-400" />
+          <span>Loading maintenance requests…</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-zinc-500">
+          <Wrench size={40} className="opacity-20" />
+          <p className="text-sm font-medium">No requests found</p>
+          <p className="text-xs">Try a different filter or raise a new request</p>
+          <button onClick={() => setShowRaise(true)}
+            className="mt-2 flex items-center gap-1.5 text-sm text-blue-400 hover:underline">
+            <Plus size={14} /> Raise Request
+          </button>
+        </div>
+      ) : (
+        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AnimatePresence mode="popLayout">
+            {filtered.map((req, i) => (
+              <MaintenanceCard
+                key={req.id}
+                request={req}
+                userRole={userRole}
+                delay={i * 0.05}
+                onApprove={() => handleApprove(req)}
+                onReject={() => handleReject(req)}
+                onAssign={() => { setActiveRequest(req); setShowAssign(true); }}
+                onResolve={() => { setActiveRequest(req); setShowResolve(true); }}
+                onExportSingle={() => maintenanceService.exportPdf([req])}
+              />
+            ))}
           </AnimatePresence>
         </motion.div>
       )}
-    </motion.div>
+
+      {!loading && filtered.length > 0 && (
+        <p className="text-center text-xs text-zinc-700 mt-6">
+          Showing {filtered.length} of {requests.length} requests
+        </p>
+      )}
+    </div>
   );
-}
+};
+
+export default Maintenance;

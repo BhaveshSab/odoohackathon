@@ -10,6 +10,7 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import { getSession, type AuthResponse } from "@/lib/auth";
+import AllocateAssetModal from "@/components/dashboard/AllocateAssetModal";
 
 // =============================================
 // CONFIG
@@ -228,6 +229,7 @@ export default function ManagerDashboard({ onNavigate, onSignOut }: ManagerDashb
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [actionLoading, setActionLoading] = useState<Record<string, string | null>>({});
   const [toast, setToast] = useState<Toast | null>(null);
+  const [showAllocate, setShowAllocate] = useState(false);
 
   const isManager = session?.user?.email === MANAGER_EMAIL;
 
@@ -306,7 +308,7 @@ export default function ManagerDashboard({ onNavigate, onSignOut }: ManagerDashb
   ];
 
   const quickActions = [
-    { icon: Plus, label: "Register Asset", badge: 0, desc: "Log new equipment into the system", color: "bg-emerald-500/20 text-emerald-400", onClick: () => onNavigate("register"), delay: 0.05 },
+    { icon: Plus, label: "Register Asset", badge: 0, desc: "Log new equipment into the system", color: "bg-emerald-500/20 text-emerald-400", onClick: () => setShowAllocate(true), delay: 0.05 },
     { icon: ShieldCheck, label: "Approve Transfers", badge: kpi?.pendingTransfers ?? 0, desc: "Review & approve pending transfer requests", color: "bg-amber-500/20 text-amber-400", onClick: () => onNavigate("transfers"), delay: 0.1 },
     { icon: ClipboardCheck, label: "Approve Maintenance", badge: maintenanceReqs.filter((m) => m.status === "Pending").length, desc: "Approve pending repair requests", color: "bg-blue-500/20 text-blue-400", onClick: () => onNavigate("maintenance"), delay: 0.15 },
     { icon: CalendarCheck, label: "Book a Resource", badge: 0, desc: "Reserve shared spaces & equipment", color: "bg-purple-500/20 text-purple-400", onClick: () => onNavigate("booking"), delay: 0.2 },
@@ -473,6 +475,18 @@ export default function ManagerDashboard({ onNavigate, onSignOut }: ManagerDashb
           </div>
         </motion.div>
       </div>
+
+      {/* Allocate Asset Modal */}
+      <AllocateAssetModal
+        open={showAllocate}
+        onClose={() => setShowAllocate(false)}
+        onSuccess={(allocationId) => {
+          setShowAllocate(false);
+          showToast(`Asset allocated! ID: ${allocationId}`);
+          fetchAll();
+        }}
+        currentUserId={session?.user?.id ?? "manager-001"}
+      />
 
       {/* Footer */}
       <div className="text-center text-[11px] text-gray-700 pb-2">AssetFlow ERP &middot; Asset Manager Portal &middot; Last updated {lastUpdated.toLocaleTimeString()}</div>

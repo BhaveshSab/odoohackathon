@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, CalendarCheck, Wrench, AlertTriangle, Clock, CheckCircle2,
   Boxes, Settings, Activity, Bell, LogOut, Zap, ChevronRight, X,
-  RefreshCw,
+  RefreshCw, Plus,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { getSession, type AuthResponse } from "@/lib/auth";
+import AllocateAssetModal from "@/components/dashboard/AllocateAssetModal";
 
 // =============================================
 // CONFIG
@@ -256,6 +257,13 @@ export default function AdminDashboard({ onNavigate, onSignOut }: AdminDashboard
   const [showNotif, setShowNotif] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [showAllocate, setShowAllocate] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+
+  const showToast = (msg: string, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Admin guard
   const isAdmin = session?.user?.email === ADMIN_EMAIL;
@@ -314,13 +322,23 @@ export default function AdminDashboard({ onNavigate, onSignOut }: AdminDashboard
   ];
 
   const quickActions = [
-    { icon: Settings, label: "System Setup / Employee Directory", desc: "Manage departments, categories & promote roles", color: "bg-blue-500/20 text-blue-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("organization"), delay: 0.05 },
-    { icon: CalendarCheck, label: "Book a Resource", desc: "Reserve conference rooms, vehicles & equipment", color: "bg-purple-500/20 text-purple-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("booking"), delay: 0.1 },
-    { icon: Wrench, label: "Raise Maintenance Request", desc: "Flag broken equipment for repair approval", color: "bg-amber-500/20 text-amber-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("maintenance"), delay: 0.15 },
+    { icon: Plus, label: "Register Asset", desc: "Allocate an available asset to an employee", color: "bg-emerald-500/20 text-emerald-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => setShowAllocate(true), delay: 0.05 },
+    { icon: Settings, label: "System Setup / Employee Directory", desc: "Manage departments, categories & promote roles", color: "bg-blue-500/20 text-blue-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("organization"), delay: 0.1 },
+    { icon: CalendarCheck, label: "Book a Resource", desc: "Reserve conference rooms, vehicles & equipment", color: "bg-purple-500/20 text-purple-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("booking"), delay: 0.15 },
+    { icon: Wrench, label: "Raise Maintenance Request", desc: "Flag broken equipment for repair approval", color: "bg-amber-500/20 text-amber-400", bg: "bg-[#1a1d2e] hover:bg-[#1e2235]", onClick: () => onNavigate("maintenance"), delay: 0.2 },
   ];
 
   return (
     <div className="w-full space-y-6">
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-medium shadow-xl border ${toast.type === "error" ? "bg-red-950 border-red-500/40 text-red-300" : "bg-emerald-950 border-emerald-500/40 text-emerald-300"}`}
+          >{toast.type === "error" ? <X size={14} className="inline mr-1.5" /> : <CheckCircle2 size={14} className="inline mr-1.5" />}{toast.msg}</motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Welcome Bar + Controls ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -513,6 +531,18 @@ export default function AdminDashboard({ onNavigate, onSignOut }: AdminDashboard
           </div>
         </motion.div>
       </div>
+
+      {/* Allocate Asset Modal */}
+      <AllocateAssetModal
+        open={showAllocate}
+        onClose={() => setShowAllocate(false)}
+        onSuccess={(allocationId) => {
+          setShowAllocate(false);
+          showToast(`Asset allocated! ID: ${allocationId}`);
+          fetchAll();
+        }}
+        currentUserId={session?.user?.id ?? "admin-001"}
+      />
 
       {/* ── Footer ── */}
       <div className="text-center text-[11px] text-gray-700 pb-2">
